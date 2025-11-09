@@ -1,0 +1,33 @@
+services:
+
+  search-embeddings:
+    image: ubuntu:22.04
+    command:       
+      - /bin/sh
+      - -c
+      - |  
+        apt-get update && apt-get install -y curl
+
+        curl --fail -X POST http://start-vectormind:8080/search \
+          -H "Content-Type: application/json" \
+          -d '{
+            "text": "Which animals swim?",
+            "max_count": 3,
+            "distance_threshold": 0.7
+          }'
+
+        curl --fail -X POST http://start-vectormind:8080/search \
+          -H "Content-Type: application/json" \
+          -d '{
+            "text": "Where are the squirrels?",
+            "max_count": 3,
+            "distance_threshold": 0.7
+          }'
+
+        curl --fail -X POST http://start-vectormind:8080/search \
+          -H "Content-Type: application/json" \
+          -d '{
+            "text": "What can be found in the pond?",
+            "max_count": 3,
+            "distance_threshold": 0.7
+          }'

@@ -1,0 +1,87 @@
+x-documentation: >
+  Project: VectorMind
+  Start the CI pipeline:
+  docker compose -f compose.ci.yml up --remove-orphans --build
+
+  Stop the CI pipeline (in a clean way):
+  docker compose -f compose.ci.yml down 
+
+models:
+
+  embedding-model:
+    model: ai/mxbai-embed-large
+    #model: ai/embeddinggemma
+
+services:
+
+  redis-test-server:
+    extends:
+      file: compose.ci.redis-test-server.yml
+      service: redis-test-server
+
+  # Run unit tests (short mode)
+  unit-tests:
+    extends:
+      file: compose.ci.unit-tests.yml
+      service: unit-tests
+    # depends_on:
+    #   redis-test-server:
+    #     condition: service_started
+
+  multi-arch-build:
+    extends:
+      file: compose.ci.multi-arch-build.yml
+      service: multi-arch-build
+    
+    depends_on:
+      unit-tests:
+        condition: service_completed_successfully
+
+  start-vectormind:
+    extends:
+      file: compose.ci.start-vectormind.yml
+      service: start-vectormind
+        
+    depends_on:
+      multi-arch-build:
+        condition: service_completed_successfully
+      redis-test-server:
+        condition: service_started        
+
+  create-embeddings:
+    extends:
+      file: compose.ci.create-embeddings.yml
+      service: create-embeddings
+      
+    depends_on:
+      start-vectormind:
+        condition: service_healthy
+
+  search-embeddings:
+    extends:
+      file: compose.ci.search-embeddings.yml
+      service: search-embeddings
+      
+    depends_on:
+      start-vectormind:
+        condition: service_healthy
+      create-embeddings:
+        condition: service_completed_successfully
+
+  stop-vectormind:
+    extends:
+      file: compose.ci.stop-vectormind.yml
+      service: stop-vectormind
+
+    depends_on:
+      search-embeddings:
+        condition: service_completed_successfully
+
+  stop-redis:
+    extends:
+      file: compose.ci.stop-redis.yml
+      service: stop-redis
+
+    depends_on:
+      stop-vectormind:
+        condition: service_completed_successfully

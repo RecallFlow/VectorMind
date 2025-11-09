@@ -1,0 +1,13 @@
+services:
+
+  stop-redis:
+    image: docker:cli
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - /bin/sh
+      - -c
+      - |  
+        echo '🚦 Stopping container service...'
+        docker stop $(docker ps -q --filter "label=local.service=redis-test-server")
+      

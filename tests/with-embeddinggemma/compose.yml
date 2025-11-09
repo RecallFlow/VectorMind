@@ -10,14 +10,8 @@ services:
     volumes:
       - ./data:/data
 
-  vectormind:
-    # tty: true
-    # stdin_open: true
-    build:
-      context: .
-      dockerfile: Dockerfile
-    # volumes:
-    #   - ./data:/app/data
+  vectormind-tests:
+    image: k33g/vectormind:0.0.1
     ports:
       - 9090:9090
       - 8080:8080
@@ -38,7 +32,8 @@ services:
       redis-server:
         condition: service_started
 
+
 models:
 
   embedding-model:
-    model: ai/mxbai-embed-large
+    model: ai/embeddinggemma

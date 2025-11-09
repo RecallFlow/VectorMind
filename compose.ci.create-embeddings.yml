@@ -1,0 +1,41 @@
+services:
+
+  create-embeddings:
+    image: ubuntu:22.04
+    command:       
+      - /bin/sh
+      - -c
+      - |  
+        apt-get update && apt-get install -y curl
+
+        curl --fail -X POST http://start-vectormind:8080/embeddings \
+            -H "Content-Type: application/json" \
+            -d '{
+                "content": "Squirrels run in the forest",
+                "label": "animals",
+                "metadata": "id=animals_1"
+            }'      
+
+        curl --fail -X POST http://start-vectormind:8080/embeddings \
+            -H "Content-Type: application/json" \
+            -d '{
+                "content": "Birds fly in the sky",
+                "label": "animals",
+                "metadata": "id=animals_2"
+            }'
+
+        curl --fail -X POST http://start-vectormind:8080/embeddings \
+            -H "Content-Type: application/json" \
+            -d '{
+                "content": "Frogs swim in the pond",
+                "label": "animals",
+                "metadata": "id=animals_3"
+            }'
+
+        curl --fail -X POST http://start-vectormind:8080/embeddings \
+            -H "Content-Type: application/json" \
+            -d '{
+                "content": "Fishes swim in the sea",
+                "label": "animals",
+                "metadata": "id=animals_4"
+            }'

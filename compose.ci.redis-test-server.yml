@@ -1,0 +1,8 @@
+services:
+  redis-test-server:
+    labels:
+      local.service: redis-test-server
+    image: redis:8.2.3-alpine3.22
+    ports:
+      - 6379:6379
+      

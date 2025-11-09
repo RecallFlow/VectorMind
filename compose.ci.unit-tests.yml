@@ -1,0 +1,27 @@
+services:
+  # Run unit tests
+  unit-tests:
+    image: golang:1.25.2-alpine
+    # environment:
+    #   <<: *common-variables
+    working_dir: /project
+    command:
+      - /bin/sh
+      - -c
+      - |
+        echo "🧪 Running unit tests for ${COMPOSE_PROJECT_NAME}"
+
+        go mod download
+        if go test -short -v > ./reports/test-output.txt; then
+          echo "✅ Tests completed"
+          echo "📄 Test report generated at ./reports/test-output.txt"
+          go test -short -cover > ./reports/test-coverage.txt
+          echo "📄 Test coverage report generated at ./reports/test-coverage.txt"
+          exit 0
+        else
+          echo "❌ Tests failed"
+          exit 1
+        fi
+
+    volumes:
+      - ./:/project

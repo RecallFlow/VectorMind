@@ -1,0 +1,13 @@
+services:
+  # Stop the functioservicen after testing
+  stop-vectormind:
+    image: docker:cli
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - /bin/sh
+      - -c
+      - |  
+        echo '🚦 Stopping container service...'
+        docker stop $(docker ps -q --filter "label=local.service=start-vectormind")
+      

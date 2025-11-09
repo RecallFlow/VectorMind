@@ -30,7 +30,7 @@ func main() {
 	redisIndexName := helpers.GetEnvOrDefault("REDIS_INDEX_NAME", "vector_idx")
 	redisAddress := helpers.GetEnvOrDefault("REDIS_ADDRESS", "localhost:6379")
 	redisPassword := helpers.GetEnvOrDefault("REDIS_PASSWORD", "")
-	embeddingDimension := helpers.StringToInt(helpers.GetEnvOrDefault("EMBEDDING_DIMENSION", "1024"))
+	//embeddingDimension := helpers.StringToInt(helpers.GetEnvOrDefault("EMBEDDING_DIMENSION", "1024"))
 
 	embeddingModelId := helpers.GetEnvOrDefault("EMBEDDING_MODEL", "ai/mxbai-embed-large")
 	modelRunnerEndpoint := helpers.GetEnvOrDefault("MODEL_RUNNER_BASE_URL", "http://localhost:12434/engines/llama.cpp/v1")
@@ -40,6 +40,16 @@ func main() {
 		option.WithBaseURL(modelRunnerEndpoint),
 		option.WithAPIKey(""),
 	)
+
+	// Calculate the embedding dimension based on the model if not explicitly set
+	var embeddingDimension int
+	e, err := CreateEmbeddingFromText(ctx, openaiClient, "Hello World", embeddingModelId)
+	if err != nil {
+		log.Fatalf("Failed to create test embedding to determine dimension: %v", err)
+	}
+	embeddingDimension = len(e)
+	fmt.Printf("Using embedding dimension: %d\n", embeddingDimension)
+
 
 	// Create Redis client
 	redisClient := CreateRedisClient(redisAddress, redisPassword)
