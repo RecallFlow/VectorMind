@@ -87,7 +87,7 @@ services:
       - ./data:/data
 
   vectormind-tests:
-    image: k33g/vectormind:0.0.1
+    image: k33g/vectormind:0.0.2
     ports:
       - 9090:9090
       - 8080:8080
