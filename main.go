@@ -206,10 +206,119 @@ func main() {
 				continue
 			}
 
+			createdAtUnix, _ := strconv.ParseInt(doc.Fields["created_at"], 10, 64)
+			createdAt := time.Unix(createdAtUnix, 0).Format(time.RFC3339)
+
 			result := SimilaritySearchResult{
-				ID:       doc.ID,
-				Content:  doc.Fields["content"],
-				Distance: distance,
+				ID:        doc.ID,
+				Content:   doc.Fields["content"],
+				Label:     doc.Fields["label"],
+				Metadata:  doc.Fields["metadata"],
+				Distance:  distance,
+				CreatedAt: createdAt,
+			}
+
+			results = append(results, result)
+		}
+
+		// Sort results by distance in ascending order (closest first)
+		sort.Slice(results, func(i, j int) bool {
+			return results[i].Distance < results[j].Distance
+		})
+
+		// Return success response
+		response := map[string]interface{}{
+			"success": true,
+			"results": results,
+		}
+
+		resultJSON, _ := json.Marshal(response)
+		return mcp.NewToolResultText(string(resultJSON)), nil
+	})
+
+	// Add similarity_search_with_label MCP tool
+	similaritySearchWithLabelTool := mcp.NewTool("similarity_search_with_label",
+		mcp.WithDescription("Search for similar documents based on text query, filtered by label. Returns documents ordered by similarity (closest first). Optionally filter by distance threshold."),
+		mcp.WithString("text",
+			mcp.Required(),
+			mcp.Description("The text query to search for similar documents"),
+		),
+		mcp.WithString("label",
+			mcp.Required(),
+			mcp.Description("The label to filter documents by"),
+		),
+		mcp.WithNumber("max_count",
+			mcp.Description("Maximum number of results to return (default: 1)"),
+		),
+		mcp.WithNumber("distance_threshold",
+			mcp.Description("Optional distance threshold. Only returns documents with distance <= threshold"),
+		),
+	)
+	mcpServer.AddTool(similaritySearchWithLabelTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Extract parameters
+		args := request.GetArguments()
+
+		text, ok := args["text"].(string)
+		if !ok || text == "" {
+			return mcp.NewToolResultError("text parameter is required"), nil
+		}
+
+		label, ok := args["label"].(string)
+		if !ok || label == "" {
+			return mcp.NewToolResultError("label parameter is required"), nil
+		}
+
+		// Get max_count with default value of 1
+		maxCount := 1
+		if mc, ok := args["max_count"].(float64); ok {
+			maxCount = int(mc)
+		}
+		if maxCount <= 0 {
+			maxCount = 1
+		}
+
+		// Get optional distance_threshold
+		var distanceThreshold *float64
+		if dt, ok := args["distance_threshold"].(float64); ok {
+			distanceThreshold = &dt
+		}
+
+		// Create embedding from query text
+		queryEmbedding, err := CreateEmbeddingFromText(ctx, openaiClient, text, embeddingModelId)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to create embedding: %v", err)), nil
+		}
+
+		// Perform similarity search with label filter
+		docs, err := SimilaritySearchWithLabel(ctx, redisClient, redisIndexName, queryEmbedding, maxCount, label)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to perform similarity search: %v", err)), nil
+		}
+
+		// Convert results to response format
+		results := make([]SimilaritySearchResult, 0, len(docs))
+		for _, doc := range docs {
+			str := doc.Fields["vector_distance"]
+			distance, err := strconv.ParseFloat(str, 32)
+			if err != nil {
+				distance = 0.0
+			}
+
+			// Filter by distance threshold if specified
+			if distanceThreshold != nil && distance > *distanceThreshold {
+				continue
+			}
+
+			createdAtUnix, _ := strconv.ParseInt(doc.Fields["created_at"], 10, 64)
+			createdAt := time.Unix(createdAtUnix, 0).Format(time.RFC3339)
+
+			result := SimilaritySearchResult{
+				ID:        doc.ID,
+				Content:   doc.Fields["content"],
+				Label:     doc.Fields["label"],
+				Metadata:  doc.Fields["metadata"],
+				Distance:  distance,
+				CreatedAt: createdAt,
 			}
 
 			results = append(results, result)
@@ -244,6 +353,11 @@ func main() {
 	// Add similarity search endpoint
 	apiMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
 		similaritySearchHandler(w, r, ctx, &openaiClient, redisClient, embeddingModelId, redisIndexName)
+	})
+
+	// Add similarity search with label endpoint
+	apiMux.HandleFunc("/search_with_label", func(w http.ResponseWriter, r *http.Request) {
+		similaritySearchWithLabelHandler(w, r, ctx, &openaiClient, redisClient, embeddingModelId, redisIndexName)
 	})
 
 	// Create MCP mux
@@ -331,6 +445,10 @@ func CreateEmbeddingIndex(ctx context.Context, redisClient *redis.Client, indexN
 			FieldType: redis.SearchFieldTypeText,
 		},
 		&redis.FieldSchema{
+			FieldName: "created_at",
+			FieldType: redis.SearchFieldTypeNumeric,
+		},
+		&redis.FieldSchema{
 			FieldName: "embedding",
 			FieldType: redis.SearchFieldTypeVector,
 			VectorArgs: &redis.FTVectorArgs{
@@ -381,6 +499,39 @@ func SimilaritySearch(ctx context.Context, redisClient *redis.Client, indexName 
 			Return: []redis.FTSearchReturn{
 				{FieldName: "vector_distance"},
 				{FieldName: "content"},
+				{FieldName: "label"},
+				{FieldName: "metadata"},
+				{FieldName: "created_at"},
+			},
+			DialectVersion: 2,
+			Params: map[string]any{
+				"vec": buffer,
+			},
+		},
+	).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	return results.Docs, nil
+}
+
+func SimilaritySearchWithLabel(ctx context.Context, redisClient *redis.Client, indexName string, queryVector []float32, numberOfTopSimilarities int, label string) ([]redis.Document, error) {
+
+	buffer := floatsToBytes(queryVector) // embedding vector as byte array
+
+	query := fmt.Sprintf("@label:{%s}=>[KNN %d @embedding $vec AS vector_distance]", label, numberOfTopSimilarities)
+
+	results, err := redisClient.FTSearchWithArgs(ctx,
+		indexName,
+		query,
+		&redis.FTSearchOptions{
+			Return: []redis.FTSearchReturn{
+				{FieldName: "vector_distance"},
+				{FieldName: "content"},
+				{FieldName: "label"},
+				{FieldName: "metadata"},
+				{FieldName: "created_at"},
 			},
 			DialectVersion: 2,
 			Params: map[string]any{
@@ -400,10 +551,11 @@ func StoreEmbedding(ctx context.Context, redisClient *redis.Client, docID string
 	_, err := redisClient.HSet(ctx,
 		docID,
 		map[string]any{
-			"content":   content,
-			"label":     label,
-			"metadata":  metadata,
-			"embedding": buffer,
+			"content":    content,
+			"label":      label,
+			"metadata":   metadata,
+			"created_at": time.Now().Unix(),
+			"embedding":  buffer,
 		},
 	).Result()
 
@@ -477,10 +629,20 @@ type SimilaritySearchRequest struct {
 	DistanceThreshold *float64 `json:"distance_threshold,omitempty"`
 }
 
+type SimilaritySearchWithLabelRequest struct {
+	Text              string   `json:"text"`
+	Label             string   `json:"label"`
+	MaxCount          int      `json:"max_count"`
+	DistanceThreshold *float64 `json:"distance_threshold,omitempty"`
+}
+
 type SimilaritySearchResult struct {
-	ID       string  `json:"id"`
-	Content  string  `json:"content"`
-	Distance float64 `json:"distance"`
+	ID        string  `json:"id"`
+	Content   string  `json:"content"`
+	Label     string  `json:"label"`
+	Metadata  string  `json:"metadata"`
+	Distance  float64 `json:"distance"`
+	CreatedAt string  `json:"created_at"`
 }
 
 type SimilaritySearchResponse struct {
@@ -641,10 +803,128 @@ func similaritySearchHandler(w http.ResponseWriter, r *http.Request, ctx context
 			continue
 		}
 
+		createdAtUnix, _ := strconv.ParseInt(doc.Fields["created_at"], 10, 64)
+		createdAt := time.Unix(createdAtUnix, 0).Format(time.RFC3339)
+
 		result := SimilaritySearchResult{
-			ID:       doc.ID,
-			Content:  doc.Fields["content"],
-			Distance: distance,
+			ID:        doc.ID,
+			Content:   doc.Fields["content"],
+			Label:     doc.Fields["label"],
+			Metadata:  doc.Fields["metadata"],
+			Distance:  distance,
+			CreatedAt: createdAt,
+		}
+
+		results = append(results, result)
+	}
+
+	// Sort results by distance in ascending order (closest first)
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Distance < results[j].Distance
+	})
+
+	// Success response
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(SimilaritySearchResponse{
+		Results: results,
+		Success: true,
+	})
+}
+
+func similaritySearchWithLabelHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, openaiClient *openai.Client, redisClient *redis.Client, embeddingModelId, indexName string) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Only accept POST requests
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(SimilaritySearchResponse{
+			Success: false,
+			Error:   "Method not allowed. Use POST",
+		})
+		return
+	}
+
+	// Parse request body
+	var req SimilaritySearchWithLabelRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(SimilaritySearchResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Invalid request body: %v", err),
+		})
+		return
+	}
+
+	// Validate required fields
+	if req.Text == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(SimilaritySearchResponse{
+			Success: false,
+			Error:   "Text is required",
+		})
+		return
+	}
+
+	if req.Label == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(SimilaritySearchResponse{
+			Success: false,
+			Error:   "Label is required",
+		})
+		return
+	}
+
+	if req.MaxCount <= 0 {
+		req.MaxCount = 5 // Default value
+	}
+
+	// Create embedding from query text
+	queryEmbedding, err := CreateEmbeddingFromText(ctx, *openaiClient, req.Text, embeddingModelId)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(SimilaritySearchResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to create embedding: %v", err),
+		})
+		return
+	}
+
+	// Perform similarity search with label filter
+	docs, err := SimilaritySearchWithLabel(ctx, redisClient, indexName, queryEmbedding, req.MaxCount, req.Label)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(SimilaritySearchResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to perform similarity search: %v", err),
+		})
+		return
+	}
+
+	// Convert results to response format
+	results := make([]SimilaritySearchResult, 0, len(docs))
+	for _, doc := range docs {
+
+		str := doc.Fields["vector_distance"]
+		distance, err := strconv.ParseFloat(str, 32)
+		if err != nil {
+			distance = 9.9
+		}
+
+		// Filter by distance threshold if specified
+		if req.DistanceThreshold != nil && distance > *req.DistanceThreshold {
+			continue
+		}
+
+		createdAtUnix, _ := strconv.ParseInt(doc.Fields["created_at"], 10, 64)
+		createdAt := time.Unix(createdAtUnix, 0).Format(time.RFC3339)
+
+		result := SimilaritySearchResult{
+			ID:        doc.ID,
+			Content:   doc.Fields["content"],
+			Label:     doc.Fields["label"],
+			Metadata:  doc.Fields["metadata"],
+			Distance:  distance,
+			CreatedAt: createdAt,
 		}
 
 		results = append(results, result)
