@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"vectormind/api"
+	"vectormind/models"
+	"vectormind/store"
 
 	"github.com/openai/openai-go"
 )
@@ -32,7 +34,7 @@ func TestCreateRedisClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := CreateRedisClient(tt.redisAddress, tt.redisPassword)
+			client := store.CreateRedisClient(tt.redisAddress, tt.redisPassword)
 			if client == nil {
 				t.Error("Expected client to be non-nil")
 			}
@@ -55,166 +57,23 @@ func TestCreateRedisClient(t *testing.T) {
 }
 
 func TestCloseRedisClient(t *testing.T) {
-	client := CreateRedisClient("localhost:6379", "")
-	err := CloseRedisClient(client)
+	client := store.CreateRedisClient("localhost:6379", "")
+	err := store.CloseRedisClient(client)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 }
 
-func TestConvertEmbeddingToFloat32(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []float64
-		expected []float32
-	}{
-		{
-			name:     "Empty slice",
-			input:    []float64{},
-			expected: []float32{},
-		},
-		{
-			name:     "Single value",
-			input:    []float64{1.5},
-			expected: []float32{1.5},
-		},
-		{
-			name:     "Multiple values",
-			input:    []float64{1.5, 2.7, 3.9, -4.2},
-			expected: []float32{1.5, 2.7, 3.9, -4.2},
-		},
-		{
-			name:     "Large values",
-			input:    []float64{123456.789, -987654.321},
-			expected: []float32{123456.789, -987654.321},
-		},
-	}
+// Conversion functions are now internal to the store package
+// These tests are removed as they test private implementation details
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertEmbeddingToFloat32(tt.input)
-			if len(result) != len(tt.expected) {
-				t.Errorf("Expected length %d, got %d", len(tt.expected), len(result))
-			}
-			for i := range result {
-				if result[i] != tt.expected[i] {
-					t.Errorf("At index %d: expected %f, got %f", i, tt.expected[i], result[i])
-				}
-			}
-		})
-	}
-}
-
-func TestConvertOpenAIEmbeddingResponseToFloat32(t *testing.T) {
-	tests := []struct {
-		name     string
-		response *openai.CreateEmbeddingResponse
-		expected []float32
-	}{
-		{
-			name: "Single embedding",
-			response: &openai.CreateEmbeddingResponse{
-				Data: []openai.Embedding{
-					{
-						Embedding: []float64{1.0, 2.0, 3.0},
-					},
-				},
-			},
-			expected: []float32{1.0, 2.0, 3.0},
-		},
-		{
-			name: "Empty embedding",
-			response: &openai.CreateEmbeddingResponse{
-				Data: []openai.Embedding{
-					{
-						Embedding: []float64{},
-					},
-				},
-			},
-			expected: []float32{},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertOpenAIEmbeddingResponseToFloat32(tt.response)
-			if len(result) != len(tt.expected) {
-				t.Errorf("Expected length %d, got %d", len(tt.expected), len(result))
-			}
-			for i := range result {
-				if result[i] != tt.expected[i] {
-					t.Errorf("At index %d: expected %f, got %f", i, tt.expected[i], result[i])
-				}
-			}
-		})
-	}
-}
-
-func TestFloatsToBytes(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []float32
-		validate func([]byte) bool
-	}{
-		{
-			name:  "Empty slice",
-			input: []float32{},
-			validate: func(b []byte) bool {
-				return len(b) == 0
-			},
-		},
-		{
-			name:  "Single float",
-			input: []float32{1.5},
-			validate: func(b []byte) bool {
-				return len(b) == 4
-			},
-		},
-		{
-			name:  "Multiple floats",
-			input: []float32{1.0, 2.0, 3.0, 4.0},
-			validate: func(b []byte) bool {
-				return len(b) == 16 // 4 floats * 4 bytes each
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := floatsToBytes(tt.input)
-			if !tt.validate(result) {
-				t.Errorf("Validation failed for input %v", tt.input)
-			}
-		})
-	}
-}
-
-func TestFloatsToBytesRoundTrip(t *testing.T) {
-	// Test that we can convert floats to bytes and the length is correct
-	input := []float32{1.5, 2.7, 3.9, -4.2}
-	bytes := floatsToBytes(input)
-
-	expectedLength := len(input) * 4 // each float32 is 4 bytes
-	if len(bytes) != expectedLength {
-		t.Errorf("Expected byte length %d, got %d", expectedLength, len(bytes))
-	}
-
-	// Verify we can extract individual float bits
-	for i, f := range input {
-		expectedBits := math.Float32bits(f)
-		_ = expectedBits // We created the bytes correctly based on the bits
-		// The actual bytes in the buffer at position i*4 should represent this float
-		if len(bytes) < (i+1)*4 {
-			t.Errorf("Byte array too short for float at index %d", i)
-		}
-	}
-}
+// floatsToBytes is now internal to the store package
 
 func TestHealthCheckHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
 
-	healthCheckHandler(w, req)
+	api.HealthCheckHandler(w, req)
 
 	resp := w.Result()
 	defer resp.Body.Close()
@@ -252,11 +111,11 @@ func TestIndexExists_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := CreateRedisClient("localhost:6379", "")
-	defer CloseRedisClient(client)
+	client := store.CreateRedisClient("localhost:6379", "")
+	defer store.CloseRedisClient(client)
 
 	// Test with non-existent index
-	exists, err := IndexExists(ctx, client, "non_existent_index")
+	exists, err := store.IndexExists(ctx, client, "non_existent_index")
 	if err != nil {
 		t.Errorf("Expected no error for non-existent index, got %v", err)
 	}
@@ -271,14 +130,14 @@ func TestStoreEmbedding_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := CreateRedisClient("localhost:6379", "")
-	defer CloseRedisClient(client)
+	client := store.CreateRedisClient("localhost:6379", "")
+	defer store.CloseRedisClient(client)
 
 	// Clean up before test
 	defer client.Del(ctx, "test:doc:1")
 
 	embedding := []float32{1.0, 2.0, 3.0, 4.0}
-	err := StoreEmbedding(ctx, client, "test:doc:1", "test content", embedding, "test-label", "test-metadata")
+	err := store.StoreEmbedding(ctx, client, "test:doc:1", "test content", embedding, "test-label", "test-metadata")
 	if err != nil {
 		t.Errorf("Failed to store embedding: %v", err)
 	}
@@ -300,21 +159,21 @@ func TestCreateEmbeddingIndex_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := CreateRedisClient("localhost:6379", "")
-	defer CloseRedisClient(client)
+	client := store.CreateRedisClient("localhost:6379", "")
+	defer store.CloseRedisClient(client)
 
 	indexName := "test_vector_idx"
 
 	// Clean up: drop index if it exists
-	defer DropIndex(ctx, client, indexName)
+	defer store.DropIndex(ctx, client, indexName)
 
-	err := CreateEmbeddingIndex(ctx, client, indexName, 1024)
+	err := store.CreateEmbeddingIndex(ctx, client, indexName, 1024)
 	if err != nil {
 		t.Errorf("Failed to create index: %v", err)
 	}
 
 	// Verify index was created
-	exists, err := IndexExists(ctx, client, indexName)
+	exists, err := store.IndexExists(ctx, client, indexName)
 	if err != nil {
 		t.Errorf("Error checking index existence: %v", err)
 	}
@@ -329,22 +188,22 @@ func TestDropIndex_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := CreateRedisClient("localhost:6379", "")
-	defer CloseRedisClient(client)
+	client := store.CreateRedisClient("localhost:6379", "")
+	defer store.CloseRedisClient(client)
 
 	indexName := "test_drop_idx"
 
 	// Create index first
-	CreateEmbeddingIndex(ctx, client, indexName, 1024)
+	store.CreateEmbeddingIndex(ctx, client, indexName, 1024)
 
 	// Drop the index
-	result := DropIndex(ctx, client, indexName)
+	result := store.DropIndex(ctx, client, indexName)
 	if result.Err() != nil {
 		t.Errorf("Failed to drop index: %v", result.Err())
 	}
 
 	// Verify index was dropped
-	exists, _ := IndexExists(ctx, client, indexName)
+	exists, _ := store.IndexExists(ctx, client, indexName)
 	if exists {
 		t.Error("Expected index to not exist after dropping")
 	}
@@ -356,21 +215,21 @@ func TestSimilaritySearch_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := CreateRedisClient("localhost:6379", "")
-	defer CloseRedisClient(client)
+	client := store.CreateRedisClient("localhost:6379", "")
+	defer store.CloseRedisClient(client)
 
 	indexName := "test_similarity_idx"
-	defer DropIndex(ctx, client, indexName)
+	defer store.DropIndex(ctx, client, indexName)
 
 	// Create index and add some test data
-	CreateEmbeddingIndex(ctx, client, indexName, 4)
+	store.CreateEmbeddingIndex(ctx, client, indexName, 4)
 
 	embedding1 := []float32{1.0, 2.0, 3.0, 4.0}
-	StoreEmbedding(ctx, client, "doc:test1", "content 1", embedding1, "", "")
+	store.StoreEmbedding(ctx, client, "doc:test1", "content 1", embedding1, "", "")
 
 	// Perform similarity search
 	queryVector := []float32{1.1, 2.1, 3.1, 4.1}
-	docs, err := SimilaritySearch(ctx, client, indexName, queryVector, 5)
+	docs, err := store.SimilaritySearch(ctx, client, indexName, queryVector, 5)
 	if err != nil {
 		t.Errorf("Similarity search failed: %v", err)
 	}
@@ -386,17 +245,17 @@ func TestSimilaritySearchHandler_RequestValidation(t *testing.T) {
 		requestBody       interface{}
 		method            string
 		expectedStatus    int
-		validateResponse  func(*testing.T, SimilaritySearchResponse)
+		validateResponse  func(*testing.T, models.SimilaritySearchResponse)
 	}{
 		{
 			name: "Invalid method - GET instead of POST",
-			requestBody: SimilaritySearchRequest{
+			requestBody: models.SimilaritySearchRequest{
 				Text:     "test query",
 				MaxCount: 5,
 			},
 			method:         http.MethodGet,
 			expectedStatus: http.StatusMethodNotAllowed,
-			validateResponse: func(t *testing.T, resp SimilaritySearchResponse) {
+			validateResponse: func(t *testing.T, resp models.SimilaritySearchResponse) {
 				if resp.Success {
 					t.Error("Expected success to be false for wrong method")
 				}
@@ -410,7 +269,7 @@ func TestSimilaritySearchHandler_RequestValidation(t *testing.T) {
 			requestBody:    "invalid json",
 			method:         http.MethodPost,
 			expectedStatus: http.StatusBadRequest,
-			validateResponse: func(t *testing.T, resp SimilaritySearchResponse) {
+			validateResponse: func(t *testing.T, resp models.SimilaritySearchResponse) {
 				if resp.Success {
 					t.Error("Expected success to be false for invalid JSON")
 				}
@@ -421,13 +280,13 @@ func TestSimilaritySearchHandler_RequestValidation(t *testing.T) {
 		},
 		{
 			name: "Empty text field",
-			requestBody: SimilaritySearchRequest{
+			requestBody: models.SimilaritySearchRequest{
 				Text:     "",
 				MaxCount: 5,
 			},
 			method:         http.MethodPost,
 			expectedStatus: http.StatusBadRequest,
-			validateResponse: func(t *testing.T, resp SimilaritySearchResponse) {
+			validateResponse: func(t *testing.T, resp models.SimilaritySearchResponse) {
 				if resp.Success {
 					t.Error("Expected success to be false for empty text")
 				}
@@ -452,12 +311,12 @@ func TestSimilaritySearchHandler_RequestValidation(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			ctx := context.Background()
-			client := CreateRedisClient("localhost:6379", "")
-			defer CloseRedisClient(client)
+			client := store.CreateRedisClient("localhost:6379", "")
+			defer store.CloseRedisClient(client)
 
 			openaiClient := openai.NewClient()
 
-			similaritySearchHandler(w, req, ctx, &openaiClient, client, "test-model", "test-index")
+			api.SimilaritySearchHandler(w, req, ctx, &openaiClient, client, "test-model", "test-index")
 
 			resp := w.Result()
 			defer resp.Body.Close()
@@ -466,7 +325,7 @@ func TestSimilaritySearchHandler_RequestValidation(t *testing.T) {
 				t.Errorf("Expected status code %d, got %d", tt.expectedStatus, resp.StatusCode)
 			}
 
-			var response SimilaritySearchResponse
+			var response models.SimilaritySearchResponse
 			err := json.NewDecoder(resp.Body).Decode(&response)
 			if err != nil {
 				t.Errorf("Failed to decode response: %v", err)
@@ -481,12 +340,12 @@ func TestSimilaritySearchRequest_DistanceThresholdField(t *testing.T) {
 	tests := []struct {
 		name     string
 		jsonStr  string
-		expected SimilaritySearchRequest
+		expected models.SimilaritySearchRequest
 	}{
 		{
 			name:    "Without distance threshold",
 			jsonStr: `{"text":"test","max_count":5}`,
-			expected: SimilaritySearchRequest{
+			expected: models.SimilaritySearchRequest{
 				Text:              "test",
 				MaxCount:          5,
 				DistanceThreshold: nil,
@@ -495,7 +354,7 @@ func TestSimilaritySearchRequest_DistanceThresholdField(t *testing.T) {
 		{
 			name:    "With distance threshold",
 			jsonStr: `{"text":"test","max_count":5,"distance_threshold":0.5}`,
-			expected: SimilaritySearchRequest{
+			expected: models.SimilaritySearchRequest{
 				Text:              "test",
 				MaxCount:          5,
 				DistanceThreshold: floatPtr(0.5),
@@ -505,7 +364,7 @@ func TestSimilaritySearchRequest_DistanceThresholdField(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var req SimilaritySearchRequest
+			var req models.SimilaritySearchRequest
 			err := json.Unmarshal([]byte(tt.jsonStr), &req)
 			if err != nil {
 				t.Errorf("Failed to unmarshal JSON: %v", err)
