@@ -20,6 +20,49 @@ VectorMind consists of:
 - **VectorMind Service**: Go application that handles embedding generation and exposes APIs
 - **Embedding Model**: Uses `ai/mxbai-embed-large` model for text embeddings (configurable)
 
+```mermaid
+graph TD
+    CLIENT1[Client REST API]:::client
+    CLIENT2[Client MCP Protocol]:::client
+
+    CLIENT1 -->|HTTP POST<br/>/embeddings<br/>/search| API
+    CLIENT2 -->|MCP Protocol| MCP
+
+    subgraph "Docker Compose Environment"
+        subgraph "VectorMind Service - Ports: 9090, 8080"
+            MCP[MCP Server<br/>Port: 9090]:::mcpserver
+            API[REST API<br/>Port: 8080]:::restapi
+            VM[VectorMind Container]:::vectormind
+
+            MCP --> VM
+            API --> VM
+        end
+
+        VM -.->|MODEL_RUNNER_BASE_URL| MODEL
+
+        subgraph "AI Model Layer"
+            MODEL[Embedding Model<br/>ai/mxbai-embed-large]:::model
+        end
+
+        VM -.->|REDIS_ADDRESS<br/>depends_on| REDIS
+
+        subgraph "Storage Layer"
+            REDIS[(Redis Server<br/>Port: 6379)]:::redis
+            DATA[(/data Volume)]:::volume
+
+            REDIS --> DATA
+        end
+    end
+
+    classDef vectormind fill:#4A90E2,stroke:#2E5C8A,stroke-width:2px,color:#fff
+    classDef redis fill:#DC382D,stroke:#A72822,stroke-width:2px,color:#fff
+    classDef model fill:#10B981,stroke:#059669,stroke-width:2px,color:#fff
+    classDef mcpserver fill:#8B5CF6,stroke:#6D28D9,stroke-width:2px,color:#fff
+    classDef restapi fill:#F59E0B,stroke:#D97706,stroke-width:2px,color:#fff
+    classDef client fill:#6B7280,stroke:#4B5563,stroke-width:2px,color:#fff
+    classDef volume fill:#EC4899,stroke:#BE185D,stroke-width:2px,color:#fff
+```
+
 ## Getting Started
 
 ### Prerequisites
@@ -199,3 +242,586 @@ Response:
 - `max_count` (optional): Maximum number of results (default: 5)
 - `distance_threshold` (optional): Maximum distance to filter results (lower = more similar)
 
+## Examples
+
+### Use VectorMind with OpenAI JS SDK
+> See [samples/openai-js-sdk](samples/openai-js-sdk)
+```javascript
+import OpenAI from "openai";
+
+// OpenAI Client
+const openai = new OpenAI({
+	baseURL: "http://localhost:12434/engines/v1",
+	apiKey: "i-love-docker-model-runner",
+});
+
+const VECTORMIND_API = "http://localhost:8080";
+
+const chunks = [
+	`# Orcs
+	Orcs are savage, brutish humanoids with dark green skin and prominent tusks. 
+	These fierce warriors inhabit dense forests where they hunt in packs, 
+	using crude but effective weapons forged from scavenged metal and bone. 
+	Their tribal society revolves around strength and combat prowess, 
+	making them formidable opponents for any adventurer brave enough to enter their woodland domain.`,
+
+	`# Dragons
+	Dragons are magnificent and ancient creatures of immense power, soaring through the skies on massive wings. 
+	These intelligent beings possess scales that shimmer like precious metals and breathe devastating elemental attacks. 
+	Known for their vast hoards of treasure and centuries of accumulated knowledge, 
+	dragons command both fear and respect throughout the realm. 
+	Their aerial dominance makes them nearly untouchable in their celestial domain.`,
+
+	`# Goblins
+	Goblins are small, cunning creatures with mottled green skin and sharp, pointed ears. 
+	Despite their diminutive size, they are surprisingly agile swimmers who have adapted to life around ponds and marshlands. 
+	These mischievous beings are known for their quick wit and tendency to play pranks on unwary travelers. 
+	They build elaborate underwater lairs connected by hidden tunnels beneath the murky pond waters.`,
+
+	`# Krakens
+	Krakens are colossal sea monsters with massive tentacles that can crush entire ships with ease. 
+	These legendary creatures dwell in the deepest ocean trenches, surfacing only to hunt or when disturbed. 
+	Their intelligence rivals that of the wisest sages, and their tentacles can stretch for hundreds of feet. 
+	Sailors speak in hushed tones of these maritime titans, whose very presence can create devastating whirlpools 
+	and tidal waves that reshape entire coastlines.`,
+];
+
+// Function to create embeddings
+async function createEmbedding(content, label = "", metadata = "") {
+	const response = await fetch(`${VECTORMIND_API}/embeddings`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({
+			content,
+			label,
+			metadata,
+		}),
+	});
+
+	return await response.json();
+}
+
+// Function to search for similar documents
+async function searchSimilar(text, maxCount = 5, distanceThreshold = 0.7) {
+	const response = await fetch(`${VECTORMIND_API}/search`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({
+			text,
+			max_count: maxCount,
+			distance_threshold: distanceThreshold,
+		}),
+	});
+
+	return await response.json();
+}
+
+let userInput = "Tell me something about the dragons";
+
+try {
+	// Create embeddings from chunks
+	console.log("Creating embeddings...\n");
+
+	for (const chunk of chunks) {
+		const result = await createEmbedding(chunk, "fantasy-creatures", "");
+		console.log("Created embedding:", result);
+	}
+
+	// Search for similar documents
+	console.log("\n\nSearching for similar documents...\n");
+
+	const searchResult = await searchSimilar(userInput, 1, 0.7);
+	console.log("Search results:\n", JSON.stringify(searchResult, null, 2));
+
+	const documents = searchResult.results.map(r => r.content).join("\n");
+
+
+	const completion = await openai.chat.completions.create({
+		model: "hf.co/menlo/jan-nano-gguf:q4_k_m",
+		messages: [
+      { role: "system", content: "Using the following documents:" },
+      { role: "system", content: "documents:\n"+ documents },
+      { role: "user", content: "userInput" }
+    ],
+		stream: true,
+	});
+
+  console.log("=".repeat);
+
+	for await (const chunk of completion) {
+		process.stdout.write(chunk.choices[0].delta.content || "");
+	}
+} catch (error) {
+	console.error("Error:", error);
+}
+```
+
+### Use VectorMind with OpenAI Golang SDK
+> See [samples/openai-go-sdk](samples/openai-go-sdk)
+```go
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"strings"
+
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
+)
+
+const VECTORMIND_API = "http://localhost:8080"
+
+// EmbeddingRequest représente la requête pour créer un embedding
+type EmbeddingRequest struct {
+	Content  string `json:"content"`
+	Label    string `json:"label,omitempty"`
+	Metadata string `json:"metadata,omitempty"`
+}
+
+// EmbeddingResponse représente la réponse de création d'embedding
+type EmbeddingResponse struct {
+	ID        string `json:"id"`
+	Content   string `json:"content"`
+	Label     string `json:"label"`
+	Metadata  string `json:"metadata"`
+	CreatedAt string `json:"created_at"`
+	Success   bool   `json:"success"`
+}
+
+// SearchRequest représente la requête de recherche
+type SearchRequest struct {
+	Text              string  `json:"text"`
+	MaxCount          int     `json:"max_count,omitempty"`
+	DistanceThreshold float64 `json:"distance_threshold,omitempty"`
+}
+
+// SearchResult représente un résultat de recherche
+type SearchResult struct {
+	ID       string  `json:"id"`
+	Content  string  `json:"content"`
+	Distance float64 `json:"distance"`
+}
+
+// SearchResponse représente la réponse de recherche
+type SearchResponse struct {
+	Results []SearchResult `json:"results"`
+	Success bool           `json:"success"`
+}
+
+// CreateEmbedding crée un embedding dans VectorMind
+func CreateEmbedding(content, label, metadata string) (*EmbeddingResponse, error) {
+	reqBody := EmbeddingRequest{
+		Content:  content,
+		Label:    label,
+		Metadata: metadata,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("erreur marshaling: %w", err)
+	}
+
+	resp, err := http.Post(VECTORMIND_API+"/embeddings", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("erreur requête: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("erreur lecture réponse: %w", err)
+	}
+
+	var result EmbeddingResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("erreur unmarshaling: %w", err)
+	}
+
+	return &result, nil
+}
+
+// SearchSimilar recherche des documents similaires
+func SearchSimilar(text string, maxCount int, distanceThreshold float64) (*SearchResponse, error) {
+	reqBody := SearchRequest{
+		Text:              text,
+		MaxCount:          maxCount,
+		DistanceThreshold: distanceThreshold,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("erreur marshaling: %w", err)
+	}
+
+	resp, err := http.Post(VECTORMIND_API+"/search", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("erreur requête: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("erreur lecture réponse: %w", err)
+	}
+
+	var result SearchResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("erreur unmarshaling: %w", err)
+	}
+
+	return &result, nil
+}
+
+func main() {
+
+	baseURL := "http://localhost:12434/engines/llama.cpp/v1/"
+	model := "hf.co/menlo/jan-nano-gguf:q4_k_m"
+
+	client := openai.NewClient(
+		option.WithBaseURL(baseURL),
+		option.WithAPIKey(""),
+	)
+
+	ctx := context.Background()
+
+	chunks := []string{
+		`# Orcs
+		Orcs are savage, brutish humanoids with dark green skin and prominent tusks.
+		These fierce warriors inhabit dense forests where they hunt in packs,
+		using crude but effective weapons forged from scavenged metal and bone.
+		Their tribal society revolves around strength and combat prowess,
+		making them formidable opponents for any adventurer brave enough to enter their woodland domain.`,
+
+		`# Dragons
+		Dragons are magnificent and ancient creatures of immense power, soaring through the skies on massive wings.
+		These intelligent beings possess scales that shimmer like precious metals and breathe devastating elemental attacks.
+		Known for their vast hoards of treasure and centuries of accumulated knowledge,
+		dragons command both fear and respect throughout the realm.
+		Their aerial dominance makes them nearly untouchable in their celestial domain.`,
+
+		`# Goblins
+		Goblins are small, cunning creatures with mottled green skin and sharp, pointed ears.
+		Despite their diminutive size, they are surprisingly agile swimmers who have adapted to life around ponds and marshlands.
+		These mischievous beings are known for their quick wit and tendency to play pranks on unwary travelers.
+		They build elaborate underwater lairs connected by hidden tunnels beneath the murky pond waters.`,
+
+		`# Krakens
+		Krakens are colossal sea monsters with massive tentacles that can crush entire ships with ease.
+		These legendary creatures dwell in the deepest ocean trenches, surfacing only to hunt or when disturbed.
+		Their intelligence rivals that of the wisest sages, and their tentacles can stretch for hundreds of feet.
+		Sailors speak in hushed tones of these maritime titans, whose very presence can create devastating whirlpools
+		and tidal waves that reshape entire coastlines.`,
+	}
+
+	// Creation of embeddings
+	fmt.Println("Creation of embeddings...")
+	for _, chunk := range chunks {
+		result, err := CreateEmbedding(chunk, "fantasy-creatures", "")
+		if err != nil {
+			fmt.Printf("Error when embedding: %v\n", err)
+			continue
+		}
+		fmt.Printf("Embedding created: ID=%s, Success=%v\n", result.ID, result.Success)
+	}
+
+	// Search for similar documents
+	fmt.Println("\n\nSearch for similar documents...")
+
+	userInput := "Tell me something about the dragons"
+
+	searchResult, err := SearchSimilar(userInput, 2, 0.7)
+	if err != nil {
+		fmt.Printf("Error search: %v\n", err)
+	}
+
+	fmt.Printf("Found: %d\n", len(searchResult.Results))
+
+	var documents string
+
+	for i, result := range searchResult.Results {
+		fmt.Printf("  %d. Distance: %.4f\n", i+1, result.Distance)
+		fmt.Printf("     ID: %s\n", result.ID)
+		fmt.Printf("     Content: %s...\n", result.Content[:50])
+		documents += result.Content + "\n"
+	}
+
+	fmt.Println(strings.Repeat("-", 50))
+	fmt.Println("Chat Completion with retrieved documents as context:")
+
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.SystemMessage("Using the following documents:"),
+		openai.SystemMessage("documents:\n" + documents),
+		openai.UserMessage(userInput),
+	}
+
+	param := openai.ChatCompletionNewParams{
+		Messages:    messages,
+		Model:       model,
+		Temperature: openai.Opt(0.0),
+	}
+
+	stream := client.Chat.Completions.NewStreaming(ctx, param)
+
+	for stream.Next() {
+		chunk := stream.Current()
+		// Stream each chunk as it arrives
+		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
+			fmt.Print(chunk.Choices[0].Delta.Content)
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		log.Fatalln("Error with the completion:", err)
+	}
+}
+```
+
+### Use VectorMind with Golang MCP client
+> See [samples/use-with-go-mcp-client](samples/use-with-go-mcp-client)
+```go
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"strings"
+
+	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
+	"github.com/mark3labs/mcp-go/mcp"
+)
+
+type SearchResult struct {
+	ID       string  `json:"id"`
+	Content  string  `json:"content"`
+	Distance float64 `json:"distance"`
+}
+
+type SearchResponse struct {
+	Results []SearchResult `json:"results"`
+	Success bool           `json:"success"`
+}
+
+var chunks = []string{
+	`# Orcs
+		Orcs are savage, brutish humanoids with dark green skin and prominent tusks.
+		These fierce warriors inhabit dense forests where they hunt in packs,
+		using crude but effective weapons forged from scavenged metal and bone.
+		Their tribal society revolves around strength and combat prowess,
+		making them formidable opponents for any adventurer brave enough to enter their woodland domain.`,
+
+	`# Dragons
+		Dragons are magnificent and ancient creatures of immense power, soaring through the skies on massive wings.
+		These intelligent beings possess scales that shimmer like precious metals and breathe devastating elemental attacks.
+		Known for their vast hoards of treasure and centuries of accumulated knowledge,
+		dragons command both fear and respect throughout the realm.
+		Their aerial dominance makes them nearly untouchable in their celestial domain.`,
+
+	`# Goblins
+		Goblins are small, cunning creatures with mottled green skin and sharp, pointed ears.
+		Despite their diminutive size, they are surprisingly agile swimmers who have adapted to life around ponds and marshlands.
+		These mischievous beings are known for their quick wit and tendency to play pranks on unwary travelers.
+		They build elaborate underwater lairs connected by hidden tunnels beneath the murky pond waters.`,
+
+	`# Krakens
+		Krakens are colossal sea monsters with massive tentacles that can crush entire ships with ease.
+		These legendary creatures dwell in the deepest ocean trenches, surfacing only to hunt or when disturbed.
+		Their intelligence rivals that of the wisest sages, and their tentacles can stretch for hundreds of feet.
+		Sailors speak in hushed tones of these maritime titans, whose very presence can create devastating whirlpools
+		and tidal waves that reshape entire coastlines.`,
+}
+
+func main() {
+
+	ctx := context.Background()
+
+	// MCP client initialization
+	fmt.Println("🚀 Initializing MCP StreamableHTTP client...")
+	// Create HTTP transport
+	httpURL := "http://localhost:9090/mcp"
+	httpTransport, err := transport.NewStreamableHTTP(httpURL)
+	if err != nil {
+		log.Fatalf("Failed to create HTTP transport: %v", err)
+	}
+	// Create client with the transport
+	mcpClient := client.NewClient(httpTransport)
+	// Start the client
+	if err := mcpClient.Start(ctx); err != nil {
+		log.Fatalf("Failed to start client: %v", err)
+	}
+
+	initRequest := mcp.InitializeRequest{}
+	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
+	initRequest.Params.ClientInfo = mcp.Implementation{
+		Name:    "MCP-Go Simple Client Example",
+		Version: "1.0.0",
+	}
+	initRequest.Params.Capabilities = mcp.ClientCapabilities{}
+
+	_, err = mcpClient.Initialize(ctx, initRequest)
+	if err != nil {
+		log.Fatalf("Failed to initialize: %v", err)
+	}
+
+	// Tools listing
+	toolsRequest := mcp.ListToolsRequest{}
+	// Get the list of tools
+	toolsResult, err := mcpClient.ListTools(ctx, toolsRequest)
+	if err != nil {
+		log.Fatalf("Failed to list tools: %v", err)
+	}
+	fmt.Println("🛠️  Available tools:")
+	for _, tool := range toolsResult.Tools {
+		fmt.Printf("- %s: %s\n", tool.Name, tool.Description)
+	}
+
+	// Create Embeddings with `create_embedding` MCP tool
+	fmt.Println("\n\nCreation of embeddings...")
+	for _, chunk := range chunks {
+		request := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name: "create_embedding",
+				Arguments: map[string]any{
+					"content":  chunk,
+					"label":    "fantasy-creatures",
+					"metadata": "",
+				},
+			},
+		}
+		toolResponse, err := mcpClient.CallTool(ctx, request)
+		if err != nil {
+			fmt.Printf("Error when embedding: %v\n", err)
+			continue
+		}
+		if toolResponse == nil || len(toolResponse.Content) == 0 {
+			fmt.Printf("No response from embedding tool\n")
+			continue
+		}
+		fmt.Println("🛠️  Tool response:", toolResponse.Content[0].(mcp.TextContent).Text)
+
+	}
+
+	fmt.Println(strings.Repeat("=", 50))
+	fmt.Println("Search for similar documents...")
+
+	userInput := "Tell me something about the dragons"
+
+	searchRequest := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "similarity_search",
+			Arguments: map[string]any{
+				"text":               userInput,
+				"max_count":          2,
+				"distance_threshold": 0.7,
+			},
+		},
+	}
+	searchResponse, err := mcpClient.CallTool(ctx, searchRequest)
+	if err != nil {
+		log.Fatalf("Error search: %v", err)
+	}
+	if searchResponse == nil || len(searchResponse.Content) == 0 {
+		log.Fatalf("No response from search tool")
+	}
+
+	searchResult := searchResponse.Content[0].(mcp.TextContent).Text
+
+	// Parse the JSON response
+	var response SearchResponse
+	err = json.Unmarshal([]byte(searchResult), &response)
+	if err != nil {
+		log.Fatalf("Error parsing search result: %v", err)
+	}
+
+	// Loop through results
+	fmt.Println("\n📋 Search Results:")
+	for _, result := range response.Results {
+		fmt.Printf("\nID: %s\n", result.ID)
+		fmt.Printf("Distance: %f\n", result.Distance)
+		fmt.Printf("Content: %s\n", result.Content)
+		fmt.Println(strings.Repeat("-", 50))
+	}
+}
+```
+
+## Development and testing
+
+**VectorMind** uses a local CI pipeline based on `Docker Compose` with the following files:
+
+- Main pipeline: `compose.ci.yml`
+- `compose.ci.redis-test-server.yml`
+- `compose.ci.unit-tests.yml`
+- `compose.ci.multi-arch-build.yml`
+- `compose.ci.start-vectormind.yml` 
+- `compose.ci.create-embeddings.yml`
+- `compose.ci.search-embeddings.yml` 
+- `compose.ci.stop-vectormind.yml` 
+- `compose.ci.stop-redis.yml `       
+
+**Start the CI pipeline**:
+```bash
+docker compose -f compose.ci.yml up --remove-orphans --build
+```
+
+**Stop the CI pipeline (in a clean way)**:
+```bash
+docker compose -f compose.ci.yml down
+```
+
+### Local CI Pipeline
+
+The local CI pipeline is orchestrated using Docker Compose and follows this workflow:
+
+```mermaid
+graph TD
+    Start([Start CI Pipeline]):::startNode
+
+    Start --> Redis[redis-test-server<br/>Redis Server]:::service
+    Start --> UnitTests[unit-tests<br/>Run Unit Tests]:::test
+
+    UnitTests -->|success| MultiBuild[multi-arch-build<br/>Multi-Architecture Build]:::build
+
+    MultiBuild -->|success| StartVM[start-vectormind<br/>Start VectorMind Service]:::service
+    Redis --> StartVM
+
+    StartVM -->|healthy| CreateEmb[create-embeddings<br/>Create Test Embeddings]:::test
+    StartVM -->|healthy| SearchEmb[search-embeddings<br/>Search Embeddings]:::test
+
+    CreateEmb -->|success| SearchEmb
+
+    SearchEmb -->|success| StopVM[stop-vectormind<br/>Stop VectorMind]:::cleanup
+
+    StopVM -->|success| StopRedis[stop-redis<br/>Stop Redis Server]:::cleanup
+
+    StopRedis --> Complete([Pipeline Complete]):::endNode
+
+    classDef startNode fill:#10B981,stroke:#059669,stroke-width:2px,color:#fff
+    classDef service fill:#3B82F6,stroke:#2563EB,stroke-width:2px,color:#fff
+    classDef test fill:#F59E0B,stroke:#D97706,stroke-width:2px,color:#fff
+    classDef build fill:#8B5CF6,stroke:#7C3AED,stroke-width:2px,color:#fff
+    classDef cleanup fill:#EF4444,stroke:#DC2626,stroke-width:2px,color:#fff
+    classDef endNode fill:#6B7280,stroke:#4B5563,stroke-width:2px,color:#fff
+```
+
+### Pipeline Stages
+
+1. **redis-test-server**: Starts Redis server for testing
+2. **unit-tests**: Runs unit tests in short mode
+3. **multi-arch-build**: Builds multi-architecture Docker image (depends on unit-tests success)
+4. **start-vectormind**: Starts VectorMind service (depends on multi-arch-build success and redis-test-server)
+5. **create-embeddings**: Creates test embeddings (depends on start-vectormind healthy)
+6. **search-embeddings**: Tests embedding search functionality (depends on create-embeddings success and start-vectormind healthy)
+7. **stop-vectormind**: Stops VectorMind service (depends on search-embeddings success)
+8. **stop-redis**: Stops Redis server (depends on stop-vectormind success)
