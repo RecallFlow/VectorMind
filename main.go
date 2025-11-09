@@ -25,6 +25,7 @@ func main() {
 	ctx := context.Background()
 
 	mcpHttpPort := helpers.GetEnvOrDefault("MCP_HTTP_PORT", "9090")
+	apiRestPort := helpers.GetEnvOrDefault("API_REST_PORT", "8080")
 
 	redisIndexName := helpers.GetEnvOrDefault("REDIS_INDEX_NAME", "vector_idx")
 	redisAddress := helpers.GetEnvOrDefault("REDIS_ADDRESS", "localhost:6379")
@@ -73,7 +74,7 @@ func main() {
 		mcp.WithDescription("This tool provides information about the VectorMind MCP server."),
 	)
 	mcpServer.AddTool(aboutTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return mcp.NewToolResultText("This MCP Server is a RAG System based on Redis"), nil
+		return mcp.NewToolResultText("This MCP Server is a Text RAG System based on Redis"), nil
 	})
 
 	// Add create_embedding MCP tool
@@ -219,36 +220,42 @@ func main() {
 		return mcp.NewToolResultText(string(resultJSON)), nil
 	})
 
-	// Start the HTTP server
-
-	log.Println("MCP 👋 Hello World 🌍 Server is running on port", mcpHttpPort)
-
-	// Create a custom mux to handle both MCP and health endpoints
-	mux := http.NewServeMux()
+	// Create REST API mux
+	apiMux := http.NewServeMux()
 
 	// Add healthcheck endpoint
-	mux.HandleFunc("/health", healthCheckHandler)
+	apiMux.HandleFunc("/health", healthCheckHandler)
 
 	// Add create embedding endpoint
-	mux.HandleFunc("/embeddings", func(w http.ResponseWriter, r *http.Request) {
+	apiMux.HandleFunc("/embeddings", func(w http.ResponseWriter, r *http.Request) {
 		createEmbeddingHandler(w, r, ctx, &openaiClient, redisClient, embeddingModelId, redisIndexName)
 	})
 
 	// Add similarity search endpoint
-	mux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+	apiMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
 		similaritySearchHandler(w, r, ctx, &openaiClient, redisClient, embeddingModelId, redisIndexName)
 	})
+
+	// Create MCP mux
+	mcpMux := http.NewServeMux()
 
 	// Add MCP endpoint
 	httpServer := server.NewStreamableHTTPServer(mcpServer,
 		server.WithEndpointPath("/mcp"),
 	)
+	mcpMux.Handle("/mcp", httpServer)
 
-	// Register MCP handler with the mux
-	mux.Handle("/mcp", httpServer)
+	// Start REST API server in a goroutine
+	go func() {
+		log.Println("REST API Server is running on port", apiRestPort)
+		if err := http.ListenAndServe(":"+apiRestPort, apiMux); err != nil {
+			log.Fatal("REST API Server error:", err)
+		}
+	}()
 
-	// Start the HTTP server with custom mux
-	log.Fatal(http.ListenAndServe(":"+mcpHttpPort, mux))
+	// Start MCP server on main thread
+	log.Println("MCP Server is running on port", mcpHttpPort)
+	log.Fatal(http.ListenAndServe(":"+mcpHttpPort, mcpMux))
 
 }
 
