@@ -242,6 +242,65 @@ Response:
 - `max_count` (optional): Maximum number of results (default: 5)
 - `distance_threshold` (optional): Maximum distance to filter results (lower = more similar)
 
+#### 3. Search for Similar Documents filtered by Label
+
+```bash
+curl -X POST http://localhost:8080/search_with_label \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "What lives in the forest?",
+    "label": "animals",
+    "max_count": 5,
+    "distance_threshold": 0.8
+  }'
+```
+
+**Parameters**:
+- `text` (required): The search query
+- `label` (required): The label to filter results by
+- `max_count` (optional): Maximum number of results (default: 5)
+- `distance_threshold` (optional): Maximum distance to filter results (lower = more similar)
+
+### MCP Usage
+
+VectorMind exposes the following MCP tools:
+
+#### 1. `about_vectormind`
+Provides information about the VectorMind MCP server.
+
+**Parameters**: None
+
+#### 2. `create_embedding`
+Create and store an embedding from text content with optional label and metadata.
+
+**Parameters**:
+- `content` (required): The text content to create an embedding from
+- `label` (optional): Label/tag for the document
+- `metadata` (optional): Metadata for the document
+
+**Returns**: JSON object with document ID, content, label, metadata, and creation timestamp
+
+#### 3. `similarity_search`
+Search for similar documents based on text query. Returns documents ordered by similarity (closest first).
+
+**Parameters**:
+- `text` (required): The text query to search for similar documents
+- `max_count` (optional): Maximum number of results to return (default: 1)
+- `distance_threshold` (optional): Only returns documents with distance <= threshold
+
+**Returns**: JSON object with array of matching documents including ID, content, label, metadata, distance, and created_at
+
+#### 4. `similarity_search_with_label`
+Search for similar documents filtered by label. Returns documents ordered by similarity (closest first).
+
+**Parameters**:
+- `text` (required): The text query to search for similar documents
+- `label` (required): The label to filter documents by
+- `max_count` (optional): Maximum number of results to return (default: 1)
+- `distance_threshold` (optional): Only returns documents with distance <= threshold
+
+**Returns**: JSON object with array of matching documents including ID, content, label, metadata, distance, and created_at
+
 ## Examples
 
 ### Use VectorMind with OpenAI JS SDK
