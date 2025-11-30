@@ -434,6 +434,62 @@ This endpoint is useful for:
 - Working with datasets that use consistent separators (CSV-like, log files, etc.)
 - Automatic handling of large records without manual chunking
 
+#### 8. Split and Store Markdown with Hierarchy (🧪 EXPERIMENTAL)
+
+Split a markdown document by headers while preserving hierarchical context. Each chunk includes structured metadata with TITLE, HIERARCHY, and CONTENT fields. Chunks larger than embedding dimension are automatically subdivided:
+
+```bash
+# Read the markdown document and escape it for JSON
+MARKDOWN_CONTENT=$(cat document.md | jq -Rs .)
+
+curl -X POST http://localhost:8080/split-and-store-markdown-with-hierarchy \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"document\": ${MARKDOWN_CONTENT},
+    \"label\": \"documentation\",
+    \"metadata\": \"project=vectormind\"
+  }"
+```
+
+**Parameters**:
+- `document` (required): The markdown document content to split and store
+- `label` (optional): Label to apply to all chunks
+- `metadata` (optional): Metadata to apply to all chunks
+
+**Response**:
+```json
+{
+  "success": true,
+  "chunk_ids": ["doc:uuid-1", "doc:uuid-2", "doc:uuid-3"],
+  "chunks_stored": 3,
+  "created_at": "2025-11-30T10:30:00Z"
+}
+```
+
+**How it works**:
+- Parses the markdown document and extracts headers with their hierarchical relationships
+- Each chunk is formatted with:
+  - `TITLE:` The header prefix (e.g., `##`) and title
+  - `HIERARCHY:` The full hierarchical path (e.g., `Introduction > Getting Started > Installation`)
+  - `CONTENT:` The section content
+- If a chunk exceeds the embedding dimension, it is automatically subdivided
+- All chunks share the same label and metadata
+
+**Example chunk format**:
+```
+TITLE: ## Installation
+HIERARCHY: Getting Started > Installation
+CONTENT: To install VectorMind, follow these steps...
+```
+
+**Use cases**:
+- Processing documentation with deep hierarchical structure
+- Maintaining semantic context through parent-child relationships
+- Searching within specific document hierarchies
+- Preserving document navigation structure in vector databases
+
+**Note**: This feature is experimental and the chunk format may change in future versions.
+
 ### MCP Usage
 
 VectorMind exposes the following MCP tools:
@@ -601,6 +657,55 @@ Split a document by a custom delimiter and store all chunks with embeddings. Chu
 - Working with datasets that use consistent separators
 - Medical databases, catalogs, or any structured text data
 - Automatic handling of large records without manual chunking
+
+#### 9. `split_and_store_markdown_with_hierarchy` (🧪 EXPERIMENTAL)
+
+Split a markdown document by headers while preserving hierarchical context. Each chunk includes structured metadata with TITLE, HIERARCHY, and CONTENT fields. Chunks larger than embedding dimension are automatically subdivided.
+
+**Parameters**:
+- `document` (required): The markdown document content to split and store
+- `label` (optional): Label to apply to all chunks
+- `metadata` (optional): Metadata to apply to all chunks
+
+**Returns**: JSON object with:
+- `success`: Boolean indicating if the operation was successful
+- `chunk_ids`: Array of document IDs for all stored chunks
+- `chunks_stored`: Number of chunks that were stored
+- `created_at`: Timestamp of when the chunks were created
+
+**Example response**:
+```json
+{
+  "success": true,
+  "chunk_ids": ["doc:abc-123", "doc:def-456", "doc:ghi-789"],
+  "chunks_stored": 3,
+  "created_at": "2025-11-30T10:30:00Z"
+}
+```
+
+**How it works**:
+- Parses the markdown document and extracts headers with their hierarchical relationships
+- Each chunk is formatted with:
+  - `TITLE:` The header prefix (e.g., `##`) and title
+  - `HIERARCHY:` The full hierarchical path (e.g., `Introduction > Getting Started > Installation`)
+  - `CONTENT:` The section content
+- If a chunk exceeds the embedding dimension, it is automatically subdivided
+- All chunks share the same label and metadata
+
+**Example chunk format**:
+```
+TITLE: ## Installation
+HIERARCHY: Getting Started > Installation
+CONTENT: To install VectorMind, follow these steps...
+```
+
+**Use cases**:
+- Processing documentation with deep hierarchical structure
+- Maintaining semantic context through parent-child relationships
+- Searching within specific document hierarchies
+- Preserving document navigation structure in vector databases
+
+**Note**: This feature is experimental and the chunk format may change in future versions.
 
 ## Examples
 

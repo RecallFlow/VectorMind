@@ -707,3 +707,129 @@ func TestSimilaritySearchResult_JSONMarshaling(t *testing.T) {
 		t.Errorf("Expected distance %f, got %f", result.Distance, unmarshaled.Distance)
 	}
 }
+
+func TestSplitAndStoreMarkdownWithHierarchyHandler_RequestValidation(t *testing.T) {
+	tests := []struct {
+		name           string
+		requestBody    interface{}
+		method         string
+		expectedStatus int
+	}{
+		{
+			name: "Invalid method - GET instead of POST",
+			requestBody: map[string]string{
+				"document": "# Test\nContent",
+			},
+			method:         http.MethodGet,
+			expectedStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:           "Missing document field",
+			requestBody:    map[string]string{},
+			method:         http.MethodPost,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Empty document field",
+			requestBody: map[string]string{
+				"document": "",
+			},
+			method:         http.MethodPost,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Invalid JSON",
+			requestBody:    "invalid json",
+			method:         http.MethodPost,
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var bodyBytes []byte
+			if str, ok := tt.requestBody.(string); ok {
+				bodyBytes = []byte(str)
+			} else {
+				bodyBytes, _ = json.Marshal(tt.requestBody)
+			}
+
+			req := httptest.NewRequest(tt.method, "/split-and-store-markdown-with-hierarchy", bytes.NewBuffer(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			ctx := context.Background()
+			client := store.CreateRedisClient(getRedisAddress(), getRedisPassword())
+			defer store.CloseRedisClient(client)
+
+			openaiClient := openai.NewClient()
+
+			api.SplitAndStoreMarkdownWithHierarchyHandler(w, req, ctx, &openaiClient, client, "test-model", getRedisIndexName())
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedStatus {
+				t.Errorf("Expected status code %d, got %d", tt.expectedStatus, resp.StatusCode)
+			}
+		})
+	}
+}
+
+func TestSplitAndStoreMarkdownWithHierarchyRequest_JSONMarshaling(t *testing.T) {
+	req := models.SplitAndStoreMarkdownWithHierarchyRequest{
+		Document: "# Test\nContent",
+		Label:    "test-label",
+		Metadata: "test-metadata",
+	}
+
+	jsonData, err := json.Marshal(req)
+	if err != nil {
+		t.Errorf("Failed to marshal request: %v", err)
+	}
+
+	var unmarshaled models.SplitAndStoreMarkdownWithHierarchyRequest
+	err = json.Unmarshal(jsonData, &unmarshaled)
+	if err != nil {
+		t.Errorf("Failed to unmarshal request: %v", err)
+	}
+
+	if unmarshaled.Document != req.Document {
+		t.Errorf("Expected document %s, got %s", req.Document, unmarshaled.Document)
+	}
+	if unmarshaled.Label != req.Label {
+		t.Errorf("Expected label %s, got %s", req.Label, unmarshaled.Label)
+	}
+	if unmarshaled.Metadata != req.Metadata {
+		t.Errorf("Expected metadata %s, got %s", req.Metadata, unmarshaled.Metadata)
+	}
+}
+
+func TestSplitAndStoreMarkdownWithHierarchyResponse_JSONMarshaling(t *testing.T) {
+	resp := models.SplitAndStoreMarkdownWithHierarchyResponse{
+		ChunkIDs:     []string{"doc:1", "doc:2", "doc:3"},
+		ChunksStored: 3,
+		Success:      true,
+	}
+
+	jsonData, err := json.Marshal(resp)
+	if err != nil {
+		t.Errorf("Failed to marshal response: %v", err)
+	}
+
+	var unmarshaled models.SplitAndStoreMarkdownWithHierarchyResponse
+	err = json.Unmarshal(jsonData, &unmarshaled)
+	if err != nil {
+		t.Errorf("Failed to unmarshal response: %v", err)
+	}
+
+	if unmarshaled.Success != resp.Success {
+		t.Errorf("Expected success %v, got %v", resp.Success, unmarshaled.Success)
+	}
+	if unmarshaled.ChunksStored != resp.ChunksStored {
+		t.Errorf("Expected chunks_stored %d, got %d", resp.ChunksStored, unmarshaled.ChunksStored)
+	}
+	if len(unmarshaled.ChunkIDs) != len(resp.ChunkIDs) {
+		t.Errorf("Expected %d chunk IDs, got %d", len(resp.ChunkIDs), len(unmarshaled.ChunkIDs))
+	}
+}
