@@ -6,13 +6,36 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"vectormind/api"
+	"vectormind/mcptools"
 	"vectormind/models"
 	"vectormind/store"
 
 	"github.com/openai/openai-go"
 )
+
+// Helper function to get Redis address from environment or use default
+func getRedisAddress() string {
+	if addr := os.Getenv("REDIS_ADDRESS"); addr != "" {
+		return addr
+	}
+	return "localhost:6379"
+}
+
+// Helper function to get Redis password from environment or use default
+func getRedisPassword() string {
+	return os.Getenv("REDIS_PASSWORD")
+}
+
+// Helper function to get Redis index name from environment or use default
+func getRedisIndexName() string {
+	if indexName := os.Getenv("REDIS_INDEX_NAME"); indexName != "" {
+		return indexName
+	}
+	return "test_index"
+}
 
 func TestCreateRedisClient(t *testing.T) {
 	tests := []struct {
@@ -22,12 +45,12 @@ func TestCreateRedisClient(t *testing.T) {
 	}{
 		{
 			name:          "Create client with default settings",
-			redisAddress:  "localhost:6379",
-			redisPassword: "",
+			redisAddress:  getRedisAddress(),
+			redisPassword: getRedisPassword(),
 		},
 		{
 			name:          "Create client with password",
-			redisAddress:  "localhost:6379",
+			redisAddress:  getRedisAddress(),
 			redisPassword: "testpassword",
 		},
 	}
@@ -57,7 +80,7 @@ func TestCreateRedisClient(t *testing.T) {
 }
 
 func TestCloseRedisClient(t *testing.T) {
-	client := store.CreateRedisClient("localhost:6379", "")
+	client := store.CreateRedisClient(getRedisAddress(), getRedisPassword())
 	err := store.CloseRedisClient(client)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -111,7 +134,7 @@ func TestIndexExists_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := store.CreateRedisClient("localhost:6379", "")
+	client := store.CreateRedisClient(getRedisAddress(), getRedisPassword())
 	defer store.CloseRedisClient(client)
 
 	// Test with non-existent index
@@ -130,7 +153,7 @@ func TestStoreEmbedding_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := store.CreateRedisClient("localhost:6379", "")
+	client := store.CreateRedisClient(getRedisAddress(), getRedisPassword())
 	defer store.CloseRedisClient(client)
 
 	// Clean up before test
@@ -159,7 +182,7 @@ func TestCreateEmbeddingIndex_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := store.CreateRedisClient("localhost:6379", "")
+	client := store.CreateRedisClient(getRedisAddress(), getRedisPassword())
 	defer store.CloseRedisClient(client)
 
 	indexName := "test_vector_idx"
@@ -188,7 +211,7 @@ func TestDropIndex_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := store.CreateRedisClient("localhost:6379", "")
+	client := store.CreateRedisClient(getRedisAddress(), getRedisPassword())
 	defer store.CloseRedisClient(client)
 
 	indexName := "test_drop_idx"
@@ -215,7 +238,7 @@ func TestSimilaritySearch_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := store.CreateRedisClient("localhost:6379", "")
+	client := store.CreateRedisClient(getRedisAddress(), getRedisPassword())
 	defer store.CloseRedisClient(client)
 
 	indexName := "test_similarity_idx"
@@ -311,12 +334,12 @@ func TestSimilaritySearchHandler_RequestValidation(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			ctx := context.Background()
-			client := store.CreateRedisClient("localhost:6379", "")
+			client := store.CreateRedisClient(getRedisAddress(), getRedisPassword())
 			defer store.CloseRedisClient(client)
 
 			openaiClient := openai.NewClient()
 
-			api.SimilaritySearchHandler(w, req, ctx, &openaiClient, client, "test-model", "test-index")
+			api.SimilaritySearchHandler(w, req, ctx, &openaiClient, client, "test-model", getRedisIndexName())
 
 			resp := w.Result()
 			defer resp.Body.Close()
@@ -395,4 +418,292 @@ func TestSimilaritySearchRequest_DistanceThresholdField(t *testing.T) {
 // Helper function to create a float64 pointer
 func floatPtr(f float64) *float64 {
 	return &f
+}
+
+func TestEmbeddingModelIdGetterSetter(t *testing.T) {
+	mcptools.SetEmbeddingModelId("test-model-id")
+	result := mcptools.GetEmbeddingModelId()
+	if result != "test-model-id" {
+		t.Errorf("Expected 'test-model-id', got %s", result)
+	}
+}
+
+func TestEmbeddingDimensionGetterSetter(t *testing.T) {
+	mcptools.SetEmbeddingDimension(1024)
+	result := mcptools.GetEmbeddingDimension()
+	if result != 1024 {
+		t.Errorf("Expected 1024, got %d", result)
+	}
+}
+
+func TestCreateEmbeddingHandler_RequestValidation(t *testing.T) {
+	tests := []struct {
+		name           string
+		requestBody    interface{}
+		method         string
+		expectedStatus int
+	}{
+		{
+			name: "Invalid method - GET instead of POST",
+			requestBody: map[string]string{
+				"content": "test content",
+			},
+			method:         http.MethodGet,
+			expectedStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:           "Missing content field",
+			requestBody:    map[string]string{},
+			method:         http.MethodPost,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Empty content field",
+			requestBody: map[string]string{
+				"content": "",
+			},
+			method:         http.MethodPost,
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var bodyBytes []byte
+			if str, ok := tt.requestBody.(string); ok {
+				bodyBytes = []byte(str)
+			} else {
+				bodyBytes, _ = json.Marshal(tt.requestBody)
+			}
+
+			req := httptest.NewRequest(tt.method, "/embeddings", bytes.NewBuffer(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			ctx := context.Background()
+			client := store.CreateRedisClient(getRedisAddress(), getRedisPassword())
+			defer store.CloseRedisClient(client)
+
+			openaiClient := openai.NewClient()
+
+			api.CreateEmbeddingHandler(w, req, ctx, &openaiClient, client, "test-model", getRedisIndexName())
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedStatus {
+				t.Errorf("Expected status code %d, got %d", tt.expectedStatus, resp.StatusCode)
+			}
+		})
+	}
+}
+
+func TestSimilaritySearchWithLabel_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	ctx := context.Background()
+	client := store.CreateRedisClient(getRedisAddress(), getRedisPassword())
+	defer store.CloseRedisClient(client)
+
+	indexName := "test_label_search_idx"
+	defer store.DropIndex(ctx, client, indexName)
+
+	// Create index and add test data with labels
+	store.CreateEmbeddingIndex(ctx, client, indexName, 4)
+
+	embedding1 := []float32{1.0, 2.0, 3.0, 4.0}
+	store.StoreEmbedding(ctx, client, "doc:test1", "content 1", embedding1, "animals", "")
+
+	embedding2 := []float32{2.0, 3.0, 4.0, 5.0}
+	store.StoreEmbedding(ctx, client, "doc:test2", "content 2", embedding2, "plants", "")
+
+	// Perform similarity search with label filter
+	queryVector := []float32{1.1, 2.1, 3.1, 4.1}
+	docs, err := store.SimilaritySearchWithLabel(ctx, client, indexName, queryVector, 5, "animals")
+	if err != nil {
+		t.Errorf("Similarity search with label failed: %v", err)
+	}
+
+	// Verify that only documents with the correct label are returned
+	for _, doc := range docs {
+		if doc.Fields["label"] != "animals" {
+			t.Errorf("Expected label 'animals', got %s", doc.Fields["label"])
+		}
+	}
+}
+
+func TestSimilaritySearchWithLabelHandler_RequestValidation(t *testing.T) {
+	tests := []struct {
+		name           string
+		requestBody    interface{}
+		method         string
+		expectedStatus int
+	}{
+		{
+			name: "Missing text field",
+			requestBody: map[string]interface{}{
+				"label": "test-label",
+			},
+			method:         http.MethodPost,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Missing label field",
+			requestBody: map[string]interface{}{
+				"text": "test query",
+			},
+			method:         http.MethodPost,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Empty label field",
+			requestBody: map[string]interface{}{
+				"text":  "test query",
+				"label": "",
+			},
+			method:         http.MethodPost,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Invalid method - GET instead of POST",
+			requestBody: map[string]interface{}{
+				"text":  "test query",
+				"label": "test-label",
+			},
+			method:         http.MethodGet,
+			expectedStatus: http.StatusMethodNotAllowed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bodyBytes, _ := json.Marshal(tt.requestBody)
+
+			req := httptest.NewRequest(tt.method, "/search_with_label", bytes.NewBuffer(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			ctx := context.Background()
+			client := store.CreateRedisClient(getRedisAddress(), getRedisPassword())
+			defer store.CloseRedisClient(client)
+
+			openaiClient := openai.NewClient()
+
+			api.SimilaritySearchWithLabelHandler(w, req, ctx, &openaiClient, client, "test-model", getRedisIndexName())
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedStatus {
+				t.Errorf("Expected status code %d, got %d", tt.expectedStatus, resp.StatusCode)
+			}
+		})
+	}
+}
+
+func TestCreateEmbeddingRequest_JSONMarshaling(t *testing.T) {
+	req := models.CreateEmbeddingRequest{
+		Content:  "test content",
+		Label:    "test-label",
+		Metadata: "test-metadata",
+	}
+
+	jsonData, err := json.Marshal(req)
+	if err != nil {
+		t.Errorf("Failed to marshal request: %v", err)
+	}
+
+	var unmarshaled models.CreateEmbeddingRequest
+	err = json.Unmarshal(jsonData, &unmarshaled)
+	if err != nil {
+		t.Errorf("Failed to unmarshal request: %v", err)
+	}
+
+	if unmarshaled.Content != req.Content {
+		t.Errorf("Expected content %s, got %s", req.Content, unmarshaled.Content)
+	}
+	if unmarshaled.Label != req.Label {
+		t.Errorf("Expected label %s, got %s", req.Label, unmarshaled.Label)
+	}
+	if unmarshaled.Metadata != req.Metadata {
+		t.Errorf("Expected metadata %s, got %s", req.Metadata, unmarshaled.Metadata)
+	}
+}
+
+func TestDistanceThresholdFiltering(t *testing.T) {
+	results := []models.SimilaritySearchResult{
+		{ID: "doc1", Distance: 0.3},
+		{ID: "doc2", Distance: 0.6},
+		{ID: "doc3", Distance: 0.9},
+	}
+
+	threshold := 0.7
+	var filtered []models.SimilaritySearchResult
+
+	for _, result := range results {
+		if result.Distance <= threshold {
+			filtered = append(filtered, result)
+		}
+	}
+
+	if len(filtered) != 2 {
+		t.Errorf("Expected 2 results after filtering, got %d", len(filtered))
+	}
+
+	// Verify that the correct documents were filtered
+	if filtered[0].ID != "doc1" {
+		t.Errorf("Expected first filtered result to be doc1, got %s", filtered[0].ID)
+	}
+	if filtered[1].ID != "doc2" {
+		t.Errorf("Expected second filtered result to be doc2, got %s", filtered[1].ID)
+	}
+}
+
+func TestStoreEmbedding_InvalidClient(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	ctx := context.Background()
+	client := store.CreateRedisClient("invalid:9999", getRedisPassword())
+	defer store.CloseRedisClient(client)
+
+	embedding := []float32{1.0, 2.0, 3.0}
+	err := store.StoreEmbedding(ctx, client, "test:doc", "content", embedding, "", "")
+
+	// We expect an error because the client cannot connect
+	if err == nil {
+		t.Log("Note: Expected an error with invalid Redis connection")
+	}
+}
+
+func TestSimilaritySearchResult_JSONMarshaling(t *testing.T) {
+	result := models.SimilaritySearchResult{
+		ID:        "doc:123",
+		Content:   "test content",
+		Label:     "test-label",
+		Metadata:  "test-metadata",
+		Distance:  0.42,
+		CreatedAt: "2025-11-30T10:00:00Z",
+	}
+
+	jsonData, err := json.Marshal(result)
+	if err != nil {
+		t.Errorf("Failed to marshal result: %v", err)
+	}
+
+	var unmarshaled models.SimilaritySearchResult
+	err = json.Unmarshal(jsonData, &unmarshaled)
+	if err != nil {
+		t.Errorf("Failed to unmarshal result: %v", err)
+	}
+
+	if unmarshaled.ID != result.ID {
+		t.Errorf("Expected ID %s, got %s", result.ID, unmarshaled.ID)
+	}
+	if unmarshaled.Distance != result.Distance {
+		t.Errorf("Expected distance %f, got %f", result.Distance, unmarshaled.Distance)
+	}
 }

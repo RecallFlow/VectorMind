@@ -1,0 +1,12 @@
+services:
+
+  get-model-info:
+    image: ubuntu:22.04
+    command:       
+      - /bin/sh
+      - -c
+      - |  
+        apt-get update && apt-get install -y curl
+
+        curl --fail http://start-vectormind:8080/embedding-model-info
+

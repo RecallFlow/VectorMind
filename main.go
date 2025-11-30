@@ -26,6 +26,8 @@ func main() {
 	redisPassword := helpers.GetEnvOrDefault("REDIS_PASSWORD", "")
 
 	embeddingModelId := helpers.GetEnvOrDefault("EMBEDDING_MODEL", "ai/mxbai-embed-large")
+	api.SetEmbeddingModelId(embeddingModelId)
+	mcptools.SetEmbeddingModelId(embeddingModelId)
 	modelRunnerEndpoint := helpers.GetEnvOrDefault("MODEL_RUNNER_BASE_URL", "http://localhost:12434/engines/llama.cpp/v1")
 
 	// Initialize OpenAI client
@@ -41,6 +43,8 @@ func main() {
 		log.Fatalf("Failed to create test embedding to determine dimension: %v", err)
 	}
 	embeddingDimension = len(e)
+	api.SetEmbeddingDimension(embeddingDimension)
+	mcptools.SetEmbeddingDimension(embeddingDimension)
 	fmt.Printf("Using embedding dimension: %d\n", embeddingDimension)
 
 	// Create Redis client
@@ -80,6 +84,9 @@ func main() {
 
 	// Add healthcheck endpoint
 	apiMux.HandleFunc("/health", api.HealthCheckHandler)
+
+	// Add embedding model info endpoint
+	apiMux.HandleFunc("/embedding-model-info", api.GetEmbeddingModelInfoHandler)
 
 	// Add create embedding endpoint
 	apiMux.HandleFunc("/embeddings", func(w http.ResponseWriter, r *http.Request) {
