@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"time"
 	"vectormind/models"
+	"vectormind/splitter"
 	"vectormind/store"
 
 	"github.com/google/uuid"
@@ -20,14 +22,13 @@ import (
 var embeddingDimension int
 var embeddingModelId string
 
-
 func SetEmbeddingDimension(dim int) {
 	embeddingDimension = dim
 }
 
 func GetEmbeddingDimension() int {
 	return embeddingDimension
-} 
+}
 
 func SetEmbeddingModelId(modelId string) {
 	embeddingModelId = modelId
@@ -297,6 +298,305 @@ func RegisterTools(mcpServer *server.MCPServer, openaiClient openai.Client, redi
 		}
 
 		resultJSON, _ := json.Marshal(response)
+		return mcp.NewToolResultText(string(resultJSON)), nil
+	})
+
+	// Chunk and store tool
+	chunkAndStoreTool := mcp.NewTool("chunk_and_store",
+		mcp.WithDescription("Chunk a document into smaller pieces with overlap and store all chunks with embeddings. All chunks will share the same label and metadata."),
+		mcp.WithString("document",
+			mcp.Required(),
+			mcp.Description("The document content to chunk and store"),
+		),
+		mcp.WithString("label",
+			mcp.Description("Optional label to apply to all chunks"),
+		),
+		mcp.WithString("metadata",
+			mcp.Description("Optional metadata to apply to all chunks"),
+		),
+		mcp.WithNumber("chunk_size",
+			mcp.Required(),
+			mcp.Description("Size of each chunk in characters (must be <= embedding dimension)"),
+		),
+		mcp.WithNumber("overlap",
+			mcp.Required(),
+			mcp.Description("Number of characters to overlap between consecutive chunks (must be < chunk_size)"),
+		),
+	)
+	mcpServer.AddTool(chunkAndStoreTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := request.GetArguments()
+
+		document, ok := args["document"].(string)
+		if !ok || document == "" {
+			return mcp.NewToolResultError("document parameter is required"), nil
+		}
+
+		label, _ := args["label"].(string)
+		metadata, _ := args["metadata"].(string)
+
+		chunkSize, ok := args["chunk_size"].(float64)
+		if !ok || chunkSize <= 0 {
+			return mcp.NewToolResultError("chunk_size must be a positive number"), nil
+		}
+
+		overlap, ok := args["overlap"].(float64)
+		if !ok || overlap < 0 {
+			return mcp.NewToolResultError("overlap must be a non-negative number"), nil
+		}
+
+		chunkSizeInt := int(chunkSize)
+		overlapInt := int(overlap)
+
+		// Validate overlap < chunk_size
+		if overlapInt >= chunkSizeInt {
+			return mcp.NewToolResultError("overlap must be less than chunk_size"), nil
+		}
+
+		// Validate chunk_size <= embeddingDimension
+		if chunkSizeInt > GetEmbeddingDimension() {
+			return mcp.NewToolResultError(fmt.Sprintf("chunk_size (%d) must be less than or equal to embedding dimension (%d)", chunkSizeInt, GetEmbeddingDimension())), nil
+		}
+
+		// Chunk the document
+		chunks := splitter.ChunkText(document, chunkSizeInt, overlapInt)
+
+		if len(chunks) == 0 {
+			return mcp.NewToolResultError("No chunks generated from the document"), nil
+		}
+
+		// Store all chunks
+		chunkIDs := make([]string, 0, len(chunks))
+		createdAt := time.Now()
+
+		for _, chunk := range chunks {
+			// Create embedding from chunk text
+			embedding, err := store.CreateEmbeddingFromText(ctx, openaiClient, chunk, embeddingModelId)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to create embedding for chunk: %v", err)), nil
+			}
+
+			// Generate unique document ID for this chunk
+			chunkID := fmt.Sprintf("doc:%s", uuid.New().String())
+
+			// Store embedding in Redis with the same label and metadata for all chunks
+			err = store.StoreEmbedding(ctx, redisClient, chunkID, chunk, embedding, label, metadata)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to store chunk embedding: %v", err)), nil
+			}
+
+			chunkIDs = append(chunkIDs, chunkID)
+		}
+
+		// Success response
+		result := map[string]interface{}{
+			"success":       true,
+			"chunk_ids":     chunkIDs,
+			"chunks_stored": len(chunkIDs),
+			"created_at":    createdAt.Format(time.RFC3339),
+		}
+
+		resultJSON, _ := json.Marshal(result)
+		return mcp.NewToolResultText(string(resultJSON)), nil
+	})
+
+	// Split and store markdown sections tool
+	splitAndStoreMarkdownSectionsTool := mcp.NewTool("split_and_store_markdown_sections",
+		mcp.WithDescription("Split a markdown document by sections (headers like #, ##, ###) and store all sections with embeddings. Sections larger than embedding dimension are automatically subdivided. All chunks will share the same label and metadata."),
+		mcp.WithString("document",
+			mcp.Required(),
+			mcp.Description("The markdown document content to split and store"),
+		),
+		mcp.WithString("label",
+			mcp.Description("Optional label to apply to all sections/chunks"),
+		),
+		mcp.WithString("metadata",
+			mcp.Description("Optional metadata to apply to all sections/chunks"),
+		),
+	)
+	mcpServer.AddTool(splitAndStoreMarkdownSectionsTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := request.GetArguments()
+
+		document, ok := args["document"].(string)
+		if !ok || document == "" {
+			return mcp.NewToolResultError("document parameter is required"), nil
+		}
+
+		label, _ := args["label"].(string)
+		metadata, _ := args["metadata"].(string)
+
+		// Split markdown by sections
+		sections := splitter.SplitMarkdownBySections(document)
+
+		if len(sections) == 0 {
+			return mcp.NewToolResultError("No sections generated from the document"), nil
+		}
+
+		// Get embedding dimension for validation
+		embeddingDim := GetEmbeddingDimension()
+
+		// Store all sections (subdividing if necessary)
+		chunkIDs := make([]string, 0)
+		createdAt := time.Now()
+
+		for _, section := range sections {
+			// Extract section header (if any)
+			sectionHeader := splitter.ExtractSectionHeader(section)
+
+			// If section is larger than embedding dimension, subdivide it
+			var chunksToStore []string
+			if len(section) > embeddingDim {
+				// Subdivide the section into smaller chunks without overlap
+				chunksToStore = splitter.ChunkText(section, embeddingDim, 0)
+				log.Println("🟠 Section exceeded embedding dimension, subdivided into", len(chunksToStore), "chunks")
+
+				// If we have a header and subdivided chunks, prepend the header to each sub-chunk
+				// (except the first one which already contains it)
+				if sectionHeader != "" && len(chunksToStore) > 1 {
+					for i := 1; i < len(chunksToStore); i++ {
+						chunksToStore[i] = sectionHeader + "\n\n" + chunksToStore[i]
+						log.Println("🟡", i+1, chunksToStore[i])
+					}
+				}
+
+			} else {
+				chunksToStore = []string{section}
+			}
+
+			// Store each chunk
+			for _, chunk := range chunksToStore {
+				// Create embedding from chunk text
+				embedding, err := store.CreateEmbeddingFromText(ctx, openaiClient, chunk, embeddingModelId)
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("Failed to create embedding for chunk: %v", err)), nil
+				}
+
+				// Generate unique document ID for this chunk
+				chunkID := fmt.Sprintf("doc:%s", uuid.New().String())
+
+				// Store embedding in Redis with the same label and metadata for all chunks
+				err = store.StoreEmbedding(ctx, redisClient, chunkID, chunk, embedding, label, metadata)
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("Failed to store chunk embedding: %v", err)), nil
+				}
+
+				chunkIDs = append(chunkIDs, chunkID)
+			}
+		}
+
+		// Success response
+		result := map[string]interface{}{
+			"success":       true,
+			"chunk_ids":     chunkIDs,
+			"chunks_stored": len(chunkIDs),
+			"created_at":    createdAt.Format(time.RFC3339),
+		}
+
+		resultJSON, _ := json.Marshal(result)
+		return mcp.NewToolResultText(string(resultJSON)), nil
+	})
+
+	// Split and store with delimiter tool
+	splitAndStoreWithDelimiterTool := mcp.NewTool("split_and_store_with_delimiter",
+		mcp.WithDescription("Split a document by a custom delimiter and store all chunks with embeddings. Chunks larger than embedding dimension are automatically subdivided with the first 2 non-empty lines prepended to preserve context. All chunks will share the same label and metadata."),
+		mcp.WithString("document",
+			mcp.Required(),
+			mcp.Description("The document content to split and store"),
+		),
+		mcp.WithString("delimiter",
+			mcp.Required(),
+			mcp.Description("The delimiter used to split the document (e.g., '-----', '###', etc.)"),
+		),
+		mcp.WithString("label",
+			mcp.Description("Optional label to apply to all chunks"),
+		),
+		mcp.WithString("metadata",
+			mcp.Description("Optional metadata to apply to all chunks"),
+		),
+	)
+	mcpServer.AddTool(splitAndStoreWithDelimiterTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := request.GetArguments()
+
+		document, ok := args["document"].(string)
+		if !ok || document == "" {
+			return mcp.NewToolResultError("document parameter is required"), nil
+		}
+
+		delimiter, ok := args["delimiter"].(string)
+		if !ok || delimiter == "" {
+			return mcp.NewToolResultError("delimiter parameter is required"), nil
+		}
+
+		label, _ := args["label"].(string)
+		metadata, _ := args["metadata"].(string)
+
+		// Split text by delimiter
+		chunks := splitter.SplitTextWithDelimiter(document, delimiter)
+
+		if len(chunks) == 0 {
+			return mcp.NewToolResultError("No chunks generated from the document"), nil
+		}
+
+		// Get embedding dimension for validation
+		embeddingDim := GetEmbeddingDimension()
+
+		// Store all chunks (subdividing if necessary)
+		chunkIDs := make([]string, 0)
+		createdAt := time.Now()
+
+		for _, chunk := range chunks {
+			// Extract first 2 non-empty lines from the chunk
+			chunkHeader := splitter.ExtractFirstNonEmptyLines(chunk, 2)
+
+			// If chunk is larger than embedding dimension, subdivide it
+			var chunksToStore []string
+			if len(chunk) > embeddingDim {
+				// Subdivide the chunk into smaller pieces without overlap
+				chunksToStore = splitter.ChunkText(chunk, embeddingDim, 0)
+				log.Println("🟠 Chunk exceeded embedding dimension, subdivided into", len(chunksToStore), "chunks")
+
+				// If we have a header and subdivided chunks, prepend the header to each sub-chunk
+				// (except the first one which already contains it)
+				if chunkHeader != "" && len(chunksToStore) > 1 {
+					for i := 1; i < len(chunksToStore); i++ {
+						chunksToStore[i] = chunkHeader + "\n\n" + chunksToStore[i]
+						log.Println("🟡", i+1, "Prepended header to sub-chunk")
+					}
+				}
+
+			} else {
+				chunksToStore = []string{chunk}
+			}
+
+			// Store each chunk
+			for _, chunkToStore := range chunksToStore {
+				// Create embedding from chunk text
+				embedding, err := store.CreateEmbeddingFromText(ctx, openaiClient, chunkToStore, embeddingModelId)
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("Failed to create embedding for chunk: %v", err)), nil
+				}
+
+				// Generate unique document ID for this chunk
+				chunkID := fmt.Sprintf("doc:%s", uuid.New().String())
+
+				// Store embedding in Redis with the same label and metadata for all chunks
+				err = store.StoreEmbedding(ctx, redisClient, chunkID, chunkToStore, embedding, label, metadata)
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("Failed to store chunk embedding: %v", err)), nil
+				}
+
+				chunkIDs = append(chunkIDs, chunkID)
+			}
+		}
+
+		// Success response
+		result := map[string]interface{}{
+			"success":       true,
+			"chunk_ids":     chunkIDs,
+			"chunks_stored": len(chunkIDs),
+			"created_at":    createdAt.Format(time.RFC3339),
+		}
+
+		resultJSON, _ := json.Marshal(result)
 		return mcp.NewToolResultText(string(resultJSON)), nil
 	})
 }

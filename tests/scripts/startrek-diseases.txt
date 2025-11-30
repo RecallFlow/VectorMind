@@ -1,0 +1,605 @@
+Disease: Andorian Ice Plague
+
+Provenance: Andoria, Andorian Empire
+
+Classification:
+Type: Cryogenic pathogen
+Risk Level: Severe
+Quarantine Status: Level 3
+
+Transmission:
+- Primary vector: Ice crystal spores
+- Secondary: Direct skin contact
+- Incubation: 2-5 days
+
+Symptoms:
+- Progressive skin crystallization
+- Internal organ freezing
+- Antennae necrosis
+- Hypothermic shock
+
+Treatments:
+- Thermal restructuring therapy
+- Anti-crystallization serums
+- Organ warming procedures
+
+Complications:
+- Permanent tissue damage
+- Antennae sensitivity loss
+- Chronic temperature regulation issues
+
+-----
+
+Disease: Vulcan Neural Cascade
+
+Provenance: Vulcan, United Federation of Planets
+
+Classification:
+Type: Neurological disorder
+Risk Level: Critical
+Quarantine Status: Level 2
+
+Transmission:
+- Primary vector: Mind meld contamination
+- Secondary: Neural interface malfunction
+- Incubation: Immediate to 24 hours
+
+Symptoms:
+- Logic center disruption
+- Emotional control loss
+- Telepathic ability degradation
+- Memory fragmentation
+
+Treatments:
+- Neural pathway reconstruction
+- Meditation therapy
+- Katra stabilization
+
+Complications:
+- Permanent emotional control loss
+- Telepathic ability damage
+- Personality fragmentation
+
+-----
+
+Disease: Klingon Blood Fury
+
+Provenance: Qo'noS, Klingon Empire
+
+Classification:
+Type: Genetic mutation
+Risk Level: Extreme
+Quarantine Status: Level 4
+
+Transmission:
+- Primary vector: Blood contact during battle
+- Secondary: Genetic activation
+- Incubation: 3-7 days
+
+Symptoms:
+- Uncontrollable rage
+- Enhanced strength
+- Cellular degradation
+- Honor system malfunction
+
+Treatments:
+- Genetic stabilization
+- Warrior meditation
+- Blood screening
+
+Complications:
+- Permanent aggression increase
+- Organ system failure
+- Death in battle frenzy
+
+-----
+
+Disease: Ferengi Profit Fever
+
+Provenance: Ferenginar, Ferengi Alliance
+
+Classification:
+Type: Neurological-Economic disorder
+Risk Level: Moderate
+Quarantine Status: Level 1
+
+Transmission:
+- Primary vector: Corrupted latinum exposure
+- Secondary: Financial data streams
+- Incubation: 1-3 business days
+
+Symptoms:
+- Uncontrollable trading compulsion
+- Lobe inflammation
+- Profit calculation inability
+- Irrational business decisions
+
+Treatments:
+- Lobe massage therapy
+- Rules of Acquisition recitation
+- Financial detoxification
+
+Complications:
+- Chronic business anxiety
+- Permanent lobe sensitivity
+- Bankruptcy risk
+
+-----
+
+Disease: Romulan Shadow Virus
+
+Provenance: Romulus, Romulan Star Empire
+
+Classification:
+Type: Bio-engineered pathogen
+Risk Level: Severe
+Quarantine Status: Level 4
+
+Transmission:
+- Primary vector: Cloaked bio-weapons
+- Secondary: Infiltration exposure
+- Incubation: Hidden, 5-10 days
+
+Symptoms:
+- Progressive invisibility
+- Organ cloaking
+- Cellular destabilization
+- Reality phase shifts
+
+Treatments:
+- Phase stabilization therapy
+- Anti-cloaking radiation
+- Molecular realignment
+
+Complications:
+- Permanent phase variance
+- Organ system desynchronization
+- Random cloaking episodes
+
+-----
+
+Disease: Cardassian Scale Rot
+
+Provenance: Cardassia Prime, Cardassian Union
+
+Classification:
+Type: Dermal deterioration
+Risk Level: Moderate
+Quarantine Status: Level 2
+
+Transmission:
+- Primary vector: Environmental toxins
+- Secondary: Scale contact
+- Incubation: 7-14 days
+
+Symptoms:
+- Scale discoloration
+- Progressive necrosis
+- Neck ridge inflammation
+- Temperature regulation failure
+
+Treatments:
+- Scale regeneration therapy
+- Ridge reinforcement
+- Thermal adjustment protocols
+
+Complications:
+- Permanent scale scarring
+- Ridge sensitivity
+- Thermal regulation issues
+
+-----
+
+Disease: Trill Symbiont Rejection
+
+Provenance: Trill, United Federation of Planets
+
+Classification:
+Type: Biological incompatibility
+Risk Level: Critical
+Quarantine Status: Level 3
+
+Transmission:
+- Primary vector: Improper joining
+- Secondary: Symbiont infection
+- Incubation: 24-48 hours
+
+Symptoms:
+- Host-symbiont desynchronization
+- Memory integration failure
+- Personality fragmentation
+- Immune system collapse
+
+Treatments:
+- Emergency separation
+- Neural reintegration
+- Immune boosting therapy
+
+Complications:
+- Permanent joining inability
+- Memory loss
+- Identity crisis
+
+-----
+
+Disease: Betazoid Empathic Overload
+
+Provenance: Betazed, United Federation of Planets
+
+Classification:
+Type: Psychic disorder
+Risk Level: High
+Quarantine Status: Level 2
+
+Transmission:
+- Primary vector: Emotional trauma exposure
+- Secondary: Telepathic feedback
+- Incubation: Immediate
+
+Symptoms:
+- Uncontrolled emotion reading
+- Psychic barrier breakdown
+- Mental exhaustion
+- Emotional flooding
+
+Treatments:
+- Psychic shielding therapy
+- Emotional dampening
+- Mental reconstruction
+
+Complications:
+- Permanent empathic sensitivity
+- Social isolation necessity
+- Emotional regulation issues
+
+-----
+
+Disease: Bajoran Orb Sickness
+
+Provenance: Bajor, United Federation of Planets
+
+Classification:
+Type: Spiritual-Physical affliction
+Risk Level: High
+Quarantine Status: Level 3
+
+Transmission:
+- Primary vector: Orb exposure
+- Secondary: Prophet energy residue
+- Incubation: Variable
+
+Symptoms:
+- Temporal displacement episodes
+- Prophetic visions
+- Pagh instability
+- Physical manifestation of visions
+
+Treatments:
+- Vedek spiritual guidance
+- Temporal alignment therapy
+- Pagh stabilization
+
+Complications:
+- Chronic temporal displacement
+- Permanent prophet connection
+- Reality perception alterations
+
+-----
+
+Disease: Borg Nano-Virus
+
+Provenance: Delta Quadrant, Borg Collective
+
+Classification:
+Type: Technological infection
+Risk Level: Extreme
+Quarantine Status: Level 5
+
+Transmission:
+- Primary vector: Nanoprobe contamination
+- Secondary: Assimilation attempt residue
+- Incubation: Hours to days
+
+Symptoms:
+- Technological integration
+- Collective consciousness emergence
+- Organic tissue conversion
+- Resistance futility
+
+Treatments:
+- Emergency nanoprobe purge
+- Individual consciousness restoration
+- Organic tissue preservation
+
+Complications:
+- Permanent cybernetic remnants
+- Collective voice echoes
+- Technology addiction
+
+-----
+
+Disease: Gorn Cellular Petrification
+
+Provenance: Gornhar, Gorn Hegemony
+
+Classification:
+Type: Metabolic disorder
+Risk Level: High
+Quarantine Status: Level 3
+
+Transmission:
+- Primary vector: Mineral exposure
+- Secondary: Reptilian mutation
+- Incubation: 2-4 weeks
+
+Symptoms:
+- Progressive tissue hardening
+- Scale crystallization
+- Movement reduction
+- Internal organ mineralization
+
+Treatments:
+- Mineral extraction therapy
+- Scale softening treatment
+- Metabolic recalibration
+
+Complications:
+- Permanent mobility reduction
+- Crystal growth episodes
+- Organ system brittleness
+
+-----
+
+Disease: Q Continuum Cascade
+
+Provenance: Q Continuum, Extra-dimensional
+
+Classification:
+Type: Reality distortion syndrome
+Risk Level: Critical
+Quarantine Status: Special Protocol
+
+Transmission:
+- Primary vector: Q power exposure
+- Secondary: Reality manipulation residue
+- Incubation: Instantaneous
+
+Symptoms:
+- Random reality alterations
+- Time-space disruption
+- Omnipotence flashes
+- Existence questioning
+
+Treatments:
+- Reality anchor therapy
+- Temporal stabilization
+- Q intervention (if available)
+
+Complications:
+- Permanent reality perception shifts
+- Random power manifestations
+- Existential crisis
+
+-----
+
+Disease: Tellarite Argumentative Syndrome
+
+Provenance: Tellar Prime, United Federation of Planets
+
+Classification:
+Type: Neurological behavior disorder
+Risk Level: Moderate
+Quarantine Status: Level 1
+
+Transmission:
+- Primary vector: Debate exposure
+- Secondary: Stress triggers
+- Incubation: 1-3 days
+
+Symptoms:
+- Uncontrollable argumentation
+- Logical reasoning deterioration
+- Aggressive debate seeking
+- Diplomatic inability
+
+Treatments:
+- Behavioral modification therapy
+- Diplomatic training exercises
+- Neural calming techniques
+
+Complications:
+- Chronic argument addiction
+- Social relationship strain
+- Diplomatic career impact
+
+-----
+
+Disease: Bolian Bio-Electric Surge
+
+Provenance: Bolarus IX, United Federation of Planets
+
+Classification:
+Type: Electrochemical disorder
+Risk Level: High
+Quarantine Status: Level 2
+
+Transmission:
+- Primary vector: Electrical system contact
+- Secondary: Bio-electric field exposure
+- Incubation: 12-36 hours
+
+Symptoms:
+- Bio-electric field disruption
+- Skin conductivity increase
+- Internal charge buildup
+- Electronic device interference
+
+Treatments:
+- Bio-electric dampening
+- Charge redistribution therapy
+- Field stabilization
+
+Complications:
+- Permanent electrical sensitivity
+- Technology use limitation
+- Random discharge events
+
+-----
+
+Disease: El-Aurian Echo Syndrome
+
+Provenance: El-Auria (destroyed)
+
+Classification:
+Type: Temporal-psychological disorder
+Risk Level: High
+Quarantine Status: Level 2
+
+Transmission:
+- Primary vector: Temporal anomaly exposure
+- Secondary: Listening overload
+- Incubation: Variable across timelines
+
+Symptoms:
+- Time perception distortion
+- Multiple timeline memories
+- Listening ability amplification
+- Historical event echoes
+
+Treatments:
+- Temporal therapy
+- Memory timeline sorting
+- Echo dampening techniques
+
+Complications:
+- Permanent timeline confusion
+- Past-future blur
+- Listening compulsion
+
+-----
+
+Disease: Pakled Enhancement Sickness
+
+Provenance: Pakled Planet
+
+Classification:
+Type: Technological dependency
+Risk Level: Moderate
+Quarantine Status: Level 1
+
+Transmission:
+- Primary vector: Stolen technology exposure
+- Secondary: Incompatible enhancements
+- Incubation: Variable
+
+Symptoms:
+- Technology integration failure
+- False intelligence syndrome
+- System incompatibility
+- Enhancement addiction
+
+Treatments:
+- Technology removal
+- Basic systems restoration
+- Cognitive recalibration
+
+Complications:
+- Permanent tech dependency
+- Learning ability reduction
+- Enhancement withdrawal
+
+-----
+
+Disease: Horta Silicon Decay
+
+Provenance: Janus VI
+
+Classification:
+Type: Mineral-based deterioration
+Risk Level: High
+Quarantine Status: Level 2
+
+Transmission:
+- Primary vector: Mineral contamination
+- Secondary: Silicon-based infection
+- Incubation: 2-3 mining cycles
+
+Symptoms:
+- Silicon matrix breakdown
+- Acid production reduction
+- Tunnel navigation confusion
+- Mineral absorption failure
+
+Treatments:
+- Silicon restructuring
+- Mineral infusion therapy
+- Matrix stabilization
+
+Complications:
+- Permanent tunneling inability
+- Acid production changes
+- Matrix instability
+
+-----
+
+Disease: Breen Thermal Shock
+
+Provenance: Breen, Breen Confederacy
+
+Classification:
+Type: Environmental adaptation failure
+Risk Level: Severe
+Quarantine Status: Level 3
+
+Transmission:
+- Primary vector: Refrigeration unit failure
+- Secondary: Temperature regulation exposure
+- Incubation: Hours
+
+Symptoms:
+- Suit system failure
+- Temperature control loss
+- Metabolic acceleration
+- Freeze suit dependency
+
+Treatments:
+- Emergency cooling protocols
+- Suit system repair
+- Metabolic regulation
+
+Complications:
+- Permanent temperature sensitivity
+- Suit dependency increase
+- Metabolic instability
+
+-----
+
+Disease: Species 8472 Bio-Mimetic Plague
+
+Provenance: Fluidic Space
+
+Classification:
+Type: Extra-dimensional biological warfare
+Risk Level: Critical
+Quarantine Status: Level 5
+
+Transmission:
+- Primary vector: Dimensional breach exposure
+- Secondary: Genetic assimilation
+- Incubation: Rapid (hours)
+
+Symptoms:
+- Genetic structure alteration
+- Triple-helix DNA formation
+- Dimensional phase shifting
+- Immune system superiority
+
+Treatments:
+- Modified nanoprobe therapy
+- Genetic restoration
+- Dimensional stabilization
+
+Complications:
+- Permanent genetic alterations
+- Dimensional instability
+- Immune system conflicts
