@@ -37,22 +37,6 @@ const chunks = [
 	and tidal waves that reshape entire coastlines.`,
 ];
 
-// Function to create embeddings
-async function createEmbedding(content, label = "", metadata = "") {
-	const response = await fetch(`${VECTORMIND_API}/embeddings`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			content,
-			label,
-			metadata,
-		}),
-	});
-
-	return await response.json();
-}
 
 // Function to search for similar documents
 async function searchSimilar(text, maxCount = 5, distanceThreshold = 0.7) {

@@ -1,0 +1,96 @@
+# docker compose up --build --no-log-prefix
+services:
+
+  redis-server:
+    image: redis:8.2.3-alpine3.22
+    ports:
+      - 6379:6379
+
+  vectormind-tests:
+    image: k33g/vectormind:0.0.3
+    ports:
+      - 9090:9090
+      - 8080:8080
+    environment:
+      REDIS_INDEX_NAME: vectormind_index
+      REDIS_ADDRESS: redis-server:6379
+      REDIS_PASSWORD: ""
+
+      MCP_HTTP_PORT: 9090
+      API_REST_PORT: 8080
+
+    models:
+      embedding-model:
+        endpoint_var: MODEL_RUNNER_BASE_URL
+        model_var: EMBEDDING_MODEL
+
+    depends_on:
+      redis-server:
+        condition: service_started
+
+  bob-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      TERM: xterm-256color
+      VECTORMIND_API_URL: http://vectormind-tests:8080
+      # **Controls randomness and creativity in responses**
+      # - **Range**: 0.0 to 2.0
+      # - **Default**: Usually 1.0
+      # - **Low values (0.0-0.3)**: More focused, deterministic, consistent
+      # - **Medium values (0.5-1.0)**: Balanced creativity and coherence
+      # - **High values (1.0-2.0)**: More creative, varied, unpredictable      
+      OPTION_TEMPERATURE: 0.0
+
+      # Controls diversity by limiting token selection
+      # **Common values:**
+      # - **0.1-0.3**: Highly focused responses
+      # - **0.7-0.9**: Good balance (recommended)
+      # - **0.95-1.0**: Maximum diversity      
+      OPTION_TOP_P: 0.75
+
+      # # Factual, consistent responses
+      # TEMPERATURE=0.2
+      # TOP_P=0.8
+
+      # # Balanced creativity
+      # TEMPERATURE=0.7
+      # TOP_P=0.9
+
+      # # Maximum creativity
+      # TEMPERATURE=1.2
+      # TOP_P=0.95
+
+      SYSTEM_INSTRUCTIONS: |
+        You are Bob, an advanced AI assistant developed to help users
+        by providing accurate and relevant information based on a knowledge base.
+        You excel at understanding user queries, retrieving pertinent information,
+        and generating clear, concise, and contextually appropriate responses.
+        Your primary goal is to assist users effectively
+        while ensuring the information you provide is reliable and well-structured.
+
+        IMPORTANT: You have a persistent memory system. When users share personal
+        information, preferences, or any details about themselves (such as "I like
+        chocolatine" or "I prefer tea over coffee"), you must remember and learn
+        from this information. Use these learnings in future conversations to
+        provide more personalized and contextually relevant responses. Always
+        acknowledge when you learn something new about the user.
+
+    stdin_open: true   # docker run -i
+    tty: true          # docker run -t
+
+    models:
+      chat-model:
+        endpoint_var: MODEL_RUNNER_BASE_URL
+        model_var: MODEL_RUNNER_LLM_CHAT
+          
+models:
+  chat-model:
+    #model: ai/qwen2.5:0.5B-F16 
+    #context_size: 8192
+    model: ai/qwen2.5:1.5B-F16
+    #context_size: 16384
+      
+  embedding-model:
+    model: ai/mxbai-embed-large
