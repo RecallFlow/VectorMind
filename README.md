@@ -11,7 +11,8 @@ VectorMind is a lightweight vector database service that provides semantic searc
 - **Vector Storage**: Uses Redis with HNSW (Hierarchical Navigable Small World) indexing for efficient similarity search
 - **Embedding Support**: For example: creates embeddings using the `ai/mxbai-embed-large` model
 - **Document Management**: Store documents with optional labels and metadata
-- **Similarity Search**: Find similar documents based on text queries with configurable distance thresholds
+- **Document Chunking**: Automatically split long documents into overlapping chunks for better semantic search
+- **Similarity Search**: Find similar documents based on text queries with configurable distance thresholds and label filtering
 
 ### Architecture
 
@@ -25,7 +26,7 @@ graph TD
     CLIENT1[Client REST API]:::client
     CLIENT2[Client MCP Protocol]:::client
 
-    CLIENT1 -->|HTTP POST<br/>/embeddings<br/>/search| API
+    CLIENT1 -->|HTTP POST<br/>/embeddings<br/>/search<br/>/chunk-and-store| API
     CLIENT2 -->|MCP Protocol| MCP
 
     subgraph "Docker Compose Environment"
@@ -281,7 +282,157 @@ curl -X POST http://localhost:8080/search_with_label \
 - `text` (required): The search query
 - `label` (required): The label to filter results by
 - `max_count` (optional): Maximum number of results (default: 5)
-- `distance_threshold` (optional): Maximum distance to filter results (lower = more similar)
+- `distance_threshold` (optional): Maximum distance to filter results (**lower = more similar**)
+
+#### 5. Chunk and Store Documents
+
+Chunk a long document into smaller pieces with overlap and store all chunks with the same label and metadata:
+
+```bash
+# Read the document content and escape it for JSON
+DOCUMENT_CONTENT=$(cat document.md | jq -Rs .)
+
+curl -X POST http://localhost:8080/chunk-and-store \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"document\": ${DOCUMENT_CONTENT},
+    \"label\": \"my-label\",
+    \"metadata\": \"category=documentation\",
+    \"chunk_size\": 1024,
+    \"overlap\": 256
+  }"
+```
+
+**Parameters**:
+- `document` (required): The document content to chunk and store
+- `label` (optional): Label to apply to all chunks
+- `metadata` (optional): Metadata to apply to all chunks
+- `chunk_size` (required): Size of each chunk in characters (must be ≤ embedding dimension)
+- `overlap` (required): Number of characters to overlap between chunks (must be < chunk_size)
+
+**Response**:
+```json
+{
+  "success": true,
+  "chunk_ids": ["doc:uuid-1", "doc:uuid-2", "doc:uuid-3"],
+  "chunks_stored": 3,
+  "created_at": "2025-11-30T10:30:00Z"
+}
+```
+
+This endpoint is useful for:
+- Processing long documents that exceed embedding model limits
+- Creating overlapping chunks for better context preservation
+- Batch storing multiple chunks with consistent labeling
+
+#### 6. Split and Store Markdown Sections
+
+Split a markdown document by sections (headers like #, ##, ###) and store all sections with embeddings. Sections larger than embedding dimension are automatically subdivided while preserving the section header:
+
+```bash
+# Read the markdown document and escape it for JSON
+MARKDOWN_CONTENT=$(cat document.md | jq -Rs .)
+
+curl -X POST http://localhost:8080/split-and-store-markdown-sections \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"document\": ${MARKDOWN_CONTENT},
+    \"label\": \"documentation\",
+    \"metadata\": \"project=vectormind\"
+  }"
+```
+
+**Parameters**:
+- `document` (required): The markdown document content to split and store
+- `label` (optional): Label to apply to all sections/chunks
+- `metadata` (optional): Metadata to apply to all sections/chunks
+
+**Response**:
+```json
+{
+  "success": true,
+  "chunk_ids": ["doc:uuid-1", "doc:uuid-2", "doc:uuid-3"],
+  "chunks_stored": 3,
+  "created_at": "2025-11-30T10:30:00Z"
+}
+```
+
+**How it works**:
+- Splits the markdown document by headers (# ## ### etc.)
+- Each section is stored as a separate chunk
+- If a section exceeds the embedding dimension, it is automatically subdivided
+- **Important**: When subdivided, each sub-chunk (except the first) will have the section header prepended to preserve context
+- All chunks share the same label and metadata
+
+**Example**: If a section "## Introduction to Vectors" is 3000 characters long and exceeds the embedding dimension (1024), it will be split into 3 sub-chunks:
+1. `## Introduction to Vectors\n\n[first 1024 chars of content]`
+2. `## Introduction to Vectors\n\n[next 1024 chars of content]`
+3. `## Introduction to Vectors\n\n[remaining content]`
+
+This endpoint is useful for:
+- Processing structured markdown documentation
+- Preserving semantic context through section headers
+- Automatic handling of large sections without manual chunking
+
+#### 7. Split and Store with Custom Delimiter
+
+Split a document by a custom delimiter and store all chunks with embeddings. Chunks larger than embedding dimension are automatically subdivided while preserving the first 2 non-empty lines as context:
+
+```bash
+# Read the document and escape it for JSON
+DOCUMENT_CONTENT=$(cat startrek.txt | jq -Rs .)
+
+curl -X POST http://localhost:8080/split-and-store-with-delimiter \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"document\": ${DOCUMENT_CONTENT},
+    \"delimiter\": \"-----\",
+    \"label\": \"star-trek-diseases\",
+    \"metadata\": \"source=federation-medical-database\"
+  }"
+```
+
+**Parameters**:
+- `document` (required): The document content to split and store
+- `delimiter` (required): The delimiter used to split the document (e.g., "-----", "###", etc.)
+- `label` (optional): Label to apply to all chunks
+- `metadata` (optional): Metadata to apply to all chunks
+
+**Response**:
+```json
+{
+  "success": true,
+  "chunk_ids": ["doc:uuid-1", "doc:uuid-2", "doc:uuid-3"],
+  "chunks_stored": 3,
+  "created_at": "2025-11-30T10:30:00Z"
+}
+```
+
+**How it works**:
+- Splits the document by the specified delimiter
+- Each chunk is stored as a separate document
+- If a chunk exceeds the embedding dimension, it is automatically subdivided
+- **Important**: When subdivided, the first 2 non-empty lines of the original chunk are prepended to each sub-chunk (except the first) to preserve context
+- All chunks share the same label and metadata
+
+**Example**: If a chunk starts with:
+```
+Disease: Andorian Ice Plague
+Provenance: Andoria, Andorian Empire
+```
+and exceeds the embedding dimension, it will be split into sub-chunks where each sub-chunk (except the first) will start with:
+```
+Disease: Andorian Ice Plague
+Provenance: Andoria, Andorian Empire
+
+[remaining content]
+```
+
+This endpoint is useful for:
+- Processing structured data with custom delimiters
+- Maintaining document context through key identifying lines
+- Working with datasets that use consistent separators (CSV-like, log files, etc.)
+- Automatic handling of large records without manual chunking
 
 ### MCP Usage
 
@@ -339,6 +490,117 @@ Search for similar documents filtered by label. Returns documents ordered by sim
 - `distance_threshold` (optional): Only returns documents with distance <= threshold
 
 **Returns**: JSON object with array of matching documents including ID, content, label, metadata, distance, and created_at
+
+#### 6. `chunk_and_store`
+Chunk a document into smaller pieces with overlap and store all chunks with embeddings. All chunks will share the same label and metadata.
+
+**Parameters**:
+- `document` (required): The document content to chunk and store
+- `label` (optional): Label to apply to all chunks
+- `metadata` (optional): Metadata to apply to all chunks
+- `chunk_size` (required): Size of each chunk in characters (must be ≤ embedding dimension)
+- `overlap` (required): Number of characters to overlap between consecutive chunks (must be < chunk_size)
+
+**Returns**: JSON object with:
+- `success`: Boolean indicating if the operation was successful
+- `chunk_ids`: Array of document IDs for all stored chunks
+- `chunks_stored`: Number of chunks that were stored
+- `created_at`: Timestamp of when the chunks were created
+
+**Example response**:
+```json
+{
+  "success": true,
+  "chunk_ids": ["doc:abc-123", "doc:def-456", "doc:ghi-789"],
+  "chunks_stored": 3,
+  "created_at": "2025-11-30T10:30:00Z"
+}
+```
+
+**Use cases**:
+- Processing long documents that exceed embedding model limits
+- Creating overlapping chunks for better semantic search
+- Batch importing large text files with consistent metadata
+
+#### 7. `split_and_store_markdown_sections`
+Split a markdown document by sections (headers like #, ##, ###) and store all sections with embeddings. Sections larger than embedding dimension are automatically subdivided while preserving the section header.
+
+**Parameters**:
+- `document` (required): The markdown document content to split and store
+- `label` (optional): Label to apply to all sections/chunks
+- `metadata` (optional): Metadata to apply to all sections/chunks
+
+**Returns**: JSON object with:
+- `success`: Boolean indicating if the operation was successful
+- `chunk_ids`: Array of document IDs for all stored chunks
+- `chunks_stored`: Number of chunks that were stored
+- `created_at`: Timestamp of when the chunks were created
+
+**Example response**:
+```json
+{
+  "success": true,
+  "chunk_ids": ["doc:abc-123", "doc:def-456", "doc:ghi-789"],
+  "chunks_stored": 3,
+  "created_at": "2025-11-30T10:30:00Z"
+}
+```
+
+**How it works**:
+- Splits the markdown document by headers (# ## ### etc.)
+- Each section is stored as a separate chunk
+- If a section exceeds the embedding dimension, it is automatically subdivided
+- **Important**: When subdivided, each sub-chunk (except the first) will have the section header prepended to preserve context
+- All chunks share the same label and metadata
+
+**Example**: If a section "## Deep Dive into the Monsters of Aethelgard" is too large, it will be split into multiple sub-chunks, each starting with "## Deep Dive into the Monsters of Aethelgard" to maintain semantic context during similarity searches.
+
+**Use cases**:
+- Processing structured markdown documentation
+- Preserving semantic context through section headers
+- Automatic handling of large sections without manual chunking
+- Maintaining document structure in vector databases
+
+#### 8. `split_and_store_with_delimiter`
+Split a document by a custom delimiter and store all chunks with embeddings. Chunks larger than embedding dimension are automatically subdivided while preserving the first 2 non-empty lines as context.
+
+**Parameters**:
+- `document` (required): The document content to split and store
+- `delimiter` (required): The delimiter used to split the document (e.g., "-----", "###", etc.)
+- `label` (optional): Label to apply to all chunks
+- `metadata` (optional): Metadata to apply to all chunks
+
+**Returns**: JSON object with:
+- `success`: Boolean indicating if the operation was successful
+- `chunk_ids`: Array of document IDs for all stored chunks
+- `chunks_stored`: Number of chunks that were stored
+- `created_at`: Timestamp of when the chunks were created
+
+**Example response**:
+```json
+{
+  "success": true,
+  "chunk_ids": ["doc:abc-123", "doc:def-456", "doc:ghi-789"],
+  "chunks_stored": 3,
+  "created_at": "2025-11-30T10:30:00Z"
+}
+```
+
+**How it works**:
+- Splits the document by the specified delimiter
+- Each chunk is stored as a separate document
+- If a chunk exceeds the embedding dimension, it is automatically subdivided
+- **Important**: When subdivided, the first 2 non-empty lines of the original chunk are prepended to each sub-chunk (except the first) to preserve context
+- All chunks share the same label and metadata
+
+**Example**: Perfect for processing structured data like the Star Trek Federation Medical Database where each disease record is separated by "-----" and starts with identifying information like "Disease: Name" and "Provenance: Location".
+
+**Use cases**:
+- Processing structured data with custom delimiters
+- Maintaining document context through key identifying lines
+- Working with datasets that use consistent separators
+- Medical databases, catalogs, or any structured text data
+- Automatic handling of large records without manual chunking
 
 ## Examples
 

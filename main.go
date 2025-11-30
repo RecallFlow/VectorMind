@@ -103,6 +103,21 @@ func main() {
 		api.SimilaritySearchWithLabelHandler(w, r, ctx, &openaiClient, redisClient, embeddingModelId, redisIndexName)
 	})
 
+	// Add chunk and store endpoint
+	apiMux.HandleFunc("/chunk-and-store", func(w http.ResponseWriter, r *http.Request) {
+		api.ChunkAndStoreHandler(w, r, ctx, &openaiClient, redisClient, embeddingModelId, redisIndexName)
+	})
+
+	// Add split and store markdown sections endpoint
+	apiMux.HandleFunc("/split-and-store-markdown-sections", func(w http.ResponseWriter, r *http.Request) {
+		api.SplitAndStoreMarkdownSectionsHandler(w, r, ctx, &openaiClient, redisClient, embeddingModelId, redisIndexName)
+	})
+
+	// Add split and store with delimiter endpoint
+	apiMux.HandleFunc("/split-and-store-with-delimiter", func(w http.ResponseWriter, r *http.Request) {
+		api.SplitAndStoreWithDelimiterHandler(w, r, ctx, &openaiClient, redisClient, embeddingModelId, redisIndexName)
+	})
+
 	// Create MCP mux
 	mcpMux := http.NewServeMux()
 
