@@ -17,6 +17,26 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+var embeddingDimension int
+var embeddingModelId string
+
+
+func SetEmbeddingDimension(dim int) {
+	embeddingDimension = dim
+}
+
+func GetEmbeddingDimension() int {
+	return embeddingDimension
+} 
+
+func SetEmbeddingModelId(modelId string) {
+	embeddingModelId = modelId
+}
+
+func GetEmbeddingModelId() string {
+	return embeddingModelId
+}
+
 // RegisterTools registers all MCP tools with the server
 func RegisterTools(mcpServer *server.MCPServer, openaiClient openai.Client, redisClient *redis.Client, embeddingModelId, redisIndexName string) {
 	// About tool
@@ -166,6 +186,20 @@ func RegisterTools(mcpServer *server.MCPServer, openaiClient openai.Client, redi
 		}
 
 		resultJSON, _ := json.Marshal(response)
+		return mcp.NewToolResultText(string(resultJSON)), nil
+	})
+
+	// Get embedding model info tool
+	getEmbeddingModelInfoTool := mcp.NewTool("get_embedding_model_info",
+		mcp.WithDescription("Get information about the embedding model being used, including the model ID and dimension."),
+	)
+	mcpServer.AddTool(getEmbeddingModelInfoTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		result := map[string]interface{}{
+			"model_id":  GetEmbeddingModelId(),
+			"dimension": GetEmbeddingDimension(),
+		}
+
+		resultJSON, _ := json.Marshal(result)
 		return mcp.NewToolResultText(string(resultJSON)), nil
 	})
 

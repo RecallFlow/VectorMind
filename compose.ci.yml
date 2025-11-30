@@ -48,6 +48,15 @@ services:
       redis-test-server:
         condition: service_started        
 
+  get-model-info:
+    extends:
+      file: compose.ci.get-model-info.yml
+      service: get-model-info
+
+    depends_on:
+      start-vectormind:
+        condition: service_healthy      
+
   create-embeddings:
     extends:
       file: compose.ci.create-embeddings.yml
@@ -56,6 +65,8 @@ services:
     depends_on:
       start-vectormind:
         condition: service_healthy
+      get-model-info:
+        condition: service_completed_successfully
 
   search-embeddings:
     extends:

@@ -18,7 +18,7 @@ VectorMind is a lightweight vector database service that provides semantic searc
 VectorMind consists of:
 - **Redis Server**: Stores embeddings and provides vector search capabilities via RediSearch
 - **VectorMind Service**: Go application that handles embedding generation and exposes APIs
-- **Embedding Model**: Uses `ai/mxbai-embed-large` model for text embeddings (configurable)
+- **Embedding Model**: For example, it uses `ai/mxbai-embed-large` model for text embeddings (configurable)
 
 ```mermaid
 graph TD
@@ -154,7 +154,29 @@ Expected response:
 
 ### REST API Usage
 
-#### 1. Create Embeddings
+#### 1. Get Embedding Model Information
+
+Get information about the embedding model being used:
+
+```bash
+curl http://localhost:8080/embedding-model-info
+```
+
+Response:
+```json
+{
+  "success": true,
+  "model_id": "ai/mxbai-embed-large",
+  "dimension": 1024
+}
+```
+
+This endpoint returns:
+- `success`: Boolean indicating if the request was successful
+- `model_id`: The identifier of the embedding model being used
+- `dimension`: The dimension of the embedding vectors
+
+#### 2. Create Embeddings
 
 Store text content with optional labels and metadata:
 
@@ -200,7 +222,7 @@ Response:
 {"id":"doc:3953dfdd-2a92-48de-b61b-0119c9d106fc","content":"Fishes swim in the sea","label":"animals","metadata":"id=animals_4","created_at":"2025-11-09T08:36:02.367855295Z","success":true}
 ```
 
-#### 2. Search for Similar Documents
+#### 3. Search for Similar Documents
 
 Find documents similar to a query text:
 
@@ -242,7 +264,7 @@ Response:
 - `max_count` (optional): Maximum number of results (default: 5)
 - `distance_threshold` (optional): Maximum distance to filter results (lower = more similar)
 
-#### 3. Search for Similar Documents filtered by Label
+#### 4. Search for Similar Documents filtered by Label
 
 ```bash
 curl -X POST http://localhost:8080/search_with_label \
@@ -290,7 +312,24 @@ Search for similar documents based on text query. Returns documents ordered by s
 
 **Returns**: JSON object with array of matching documents including ID, content, label, metadata, distance, and created_at
 
-#### 4. `similarity_search_with_label`
+#### 4. `get_embedding_model_info`
+Get information about the embedding model being used, including the model ID and dimension.
+
+**Parameters**: None
+
+**Returns**: JSON object with:
+- `model_id`: The identifier of the embedding model being used
+- `dimension`: The dimension of the embedding vectors
+
+**Example response**:
+```json
+{
+  "model_id": "ai/mxbai-embed-large",
+  "dimension": 1024
+}
+```
+
+#### 5. `similarity_search_with_label`
 Search for similar documents filtered by label. Returns documents ordered by similarity (closest first).
 
 **Parameters**:
@@ -824,6 +863,7 @@ func main() {
 - `compose.ci.unit-tests.yml`
 - `compose.ci.multi-arch-build.yml`
 - `compose.ci.start-vectormind.yml` 
+- `compose.ci.get-model-info.yml`
 - `compose.ci.create-embeddings.yml`
 - `compose.ci.search-embeddings.yml` 
 - `compose.ci.stop-vectormind.yml` 
@@ -855,7 +895,10 @@ graph TD
     MultiBuild -->|success| StartVM[start-vectormind<br/>Start VectorMind Service]:::service
     Redis --> StartVM
 
-    StartVM -->|healthy| CreateEmb[create-embeddings<br/>Create Test Embeddings]:::test
+    StartVM -->|healthy| GetModelInfo[get-model-info<br/>Get Embedding Model Info]:::test
+
+    GetModelInfo -->|success| CreateEmb[create-embeddings<br/>Create Test Embeddings]:::test
+
     StartVM -->|healthy| SearchEmb[search-embeddings<br/>Search Embeddings]:::test
 
     CreateEmb -->|success| SearchEmb
@@ -880,7 +923,8 @@ graph TD
 2. **unit-tests**: Runs unit tests in short mode
 3. **multi-arch-build**: Builds multi-architecture Docker image (depends on unit-tests success)
 4. **start-vectormind**: Starts VectorMind service (depends on multi-arch-build success and redis-test-server)
-5. **create-embeddings**: Creates test embeddings (depends on start-vectormind healthy)
-6. **search-embeddings**: Tests embedding search functionality (depends on create-embeddings success and start-vectormind healthy)
-7. **stop-vectormind**: Stops VectorMind service (depends on search-embeddings success)
-8. **stop-redis**: Stops Redis server (depends on stop-vectormind success)
+5. **get-model-info**: Gets embedding model information (depends on start-vectormind healthy)
+6. **create-embeddings**: Creates test embeddings (depends on start-vectormind healthy and get-model-info success)
+7. **search-embeddings**: Tests embedding search functionality (depends on create-embeddings success and start-vectormind healthy)
+8. **stop-vectormind**: Stops VectorMind service (depends on search-embeddings success)
+9. **stop-redis**: Stops Redis server (depends on stop-vectormind success)

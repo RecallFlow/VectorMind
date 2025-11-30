@@ -2,8 +2,10 @@ services:
   # Run unit tests
   unit-tests:
     image: golang:1.25.3-alpine
-    # environment:
-    #   <<: *common-variables
+    environment:
+      REDIS_ADDRESS: redis-test-server:6379
+      REDIS_INDEX_NAME: vectormind_index
+      REDIS_PASSWORD: ""
     working_dir: /project
     command:
       - /bin/sh

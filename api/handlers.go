@@ -16,6 +16,49 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+var embeddingDimension int
+var embeddingModelId string
+
+func SetEmbeddingDimension(dim int) {
+	embeddingDimension = dim
+}
+
+func GetEmbeddingDimension() int {
+	return embeddingDimension
+}
+
+func SetEmbeddingModelId(modelId string) {
+	embeddingModelId = modelId
+}
+
+func GetEmbeddingModelId() string {
+	return embeddingModelId
+}
+
+// GetEmbeddingModelInfoHandler handles requests for embedding model information
+func GetEmbeddingModelInfoHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Only accept GET requests
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Method not allowed. Use GET",
+		})
+		return
+	}
+
+	response := map[string]interface{}{
+		"success":   true,
+		"model_id":  embeddingModelId,
+		"dimension": embeddingDimension,
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
 // HealthCheckHandler handles health check requests
 func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
