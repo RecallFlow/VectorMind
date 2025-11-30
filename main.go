@@ -118,6 +118,11 @@ func main() {
 		api.SplitAndStoreWithDelimiterHandler(w, r, ctx, &openaiClient, redisClient, embeddingModelId, redisIndexName)
 	})
 
+	// Add split and store markdown with hierarchy endpoint
+	apiMux.HandleFunc("/split-and-store-markdown-with-hierarchy", func(w http.ResponseWriter, r *http.Request) {
+		api.SplitAndStoreMarkdownWithHierarchyHandler(w, r, ctx, &openaiClient, redisClient, embeddingModelId, redisIndexName)
+	})
+
 	// Create MCP mux
 	mcpMux := http.NewServeMux()
 

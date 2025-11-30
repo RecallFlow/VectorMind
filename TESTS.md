@@ -19,6 +19,19 @@ Unit tests do not require any external dependencies and can run independently. T
 - `TestHealthCheckHandler` - Tests the HTTP health check endpoint
 - `TestSimilaritySearchHandler_RequestValidation` - Tests request validation for similarity search (HTTP method, JSON parsing, required fields)
 - `TestSimilaritySearchRequest_DistanceThresholdField` - Tests JSON serialization/deserialization of the optional `distance_threshold` parameter
+- `TestSplitAndStoreMarkdownWithHierarchyHandler_RequestValidation` - Tests request validation for split markdown with hierarchy endpoint
+- `TestSplitAndStoreMarkdownWithHierarchyRequest_JSONMarshaling` - Tests JSON marshaling of split markdown with hierarchy requests
+- `TestSplitAndStoreMarkdownWithHierarchyResponse_JSONMarshaling` - Tests JSON marshaling of split markdown with hierarchy responses
+
+#### Splitter Package Tests
+
+The `splitter` package includes comprehensive unit tests for markdown processing:
+
+- `TestParseMarkdownHierarchy` - Tests markdown parsing with hierarchical structure (6 test cases covering different hierarchy levels and edge cases)
+- `TestBuildHierarchy` - Tests hierarchy string generation from markdown structure
+- `TestChunkWithMarkdownHierarchy` - Tests chunk generation with TITLE, HIERARCHY, and CONTENT metadata (4 test cases)
+- `TestChunkWithMarkdownHierarchy_Format` - Verifies the exact format of generated chunks
+- `TestMarkdownChunkStruct` - Tests the MarkdownChunk data structure
 
 ### Integration Tests
 
@@ -62,6 +75,26 @@ go test -v
 
 ```bash
 go test -run TestHealthCheckHandler
+```
+
+### Run Tests for Specific Package
+
+```bash
+# Run all tests in the splitter package
+go test -v ./splitter/
+
+# Run specific test in splitter package
+go test -v -run TestChunkWithMarkdownHierarchy ./splitter/
+```
+
+### Run All Tests in All Packages
+
+```bash
+# Short mode (unit tests only)
+go test -short ./...
+
+# All tests including integration tests
+go test ./...
 ```
 
 ## Prerequisites for Integration Tests

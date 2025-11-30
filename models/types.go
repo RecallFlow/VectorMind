@@ -102,3 +102,19 @@ type SplitAndStoreWithDelimiterResponse struct {
 	Success      bool      `json:"success"`
 	Error        string    `json:"error,omitempty"`
 }
+
+// SplitAndStoreMarkdownWithHierarchyRequest represents the request to split markdown with hierarchy and store
+type SplitAndStoreMarkdownWithHierarchyRequest struct {
+	Document string `json:"document"`
+	Label    string `json:"label"`
+	Metadata string `json:"metadata"`
+}
+
+// SplitAndStoreMarkdownWithHierarchyResponse represents the response after splitting and storing markdown with hierarchy
+type SplitAndStoreMarkdownWithHierarchyResponse struct {
+	ChunkIDs     []string  `json:"chunk_ids"`
+	ChunksStored int       `json:"chunks_stored"`
+	CreatedAt    time.Time `json:"created_at"`
+	Success      bool      `json:"success"`
+	Error        string    `json:"error,omitempty"`
+}
