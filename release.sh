@@ -20,6 +20,7 @@ go run ./release/release.go -old="k33g/vectormind:${PREVIOUS_DOCKER_TAG}" -new="
 go run ./release/release.go -old="k33g/vectormind:${PREVIOUS_DOCKER_TAG}" -new="k33g/vectormind:${DOCKER_TAG}" -file="tests/with-nomic/compose.yml"
 
 go run ./release/release.go -old="k33g/vectormind:${PREVIOUS_DOCKER_TAG}" -new="k33g/vectormind:${DOCKER_TAG}" -file="samples/openai-js-sdk/compose.yml"
+go run ./release/release.go -old="k33g/vectormind:${PREVIOUS_DOCKER_TAG}" -new="k33g/vectormind:${DOCKER_TAG}" -file="samples/rag-memory-with-langchain-js/compose.yml"
 
 
 go run ./release/release.go -old="${PREVIOUS_DOCKER_TAG}" -new="${DOCKER_TAG}" -file="README.md"
